@@ -8,7 +8,7 @@ Last reviewed against Apple's public requirements: October 2, 2026.
 - Bundle ID: com.nightvibes33.scananything
 - Platform: iPhone only
 - Minimum OS: iOS 18
-- CI toolchain: Xcode 27 / current iOS SDK
+- CI toolchain: stable macOS 26 GitHub runner with the selected Xcode/iOS SDK
 - Camera-only path: ARKit + on-device msplat Gaussian reconstruction
 - Enhanced path: Apple Object Capture / photogrammetry on supported LiDAR iPhones
 - Data model: local app-container storage; no developer-operated upload service
@@ -16,7 +16,6 @@ Last reviewed against Apple's public requirements: October 2, 2026.
 
 ## Blocking before App Store submission
 
-- Move this staging branch into the standalone NightVibes33/ScanAnything repository.
 - Publish docs/privacy.html at https://nightvibes33.github.io/ScanAnything/privacy.html.
 - Create App Store Connect products com.nightvibes33.scananything.pro.monthly and com.nightvibes33.scananything.pro.yearly in a subscription group.
 - Configure Apple Developer signing/team and create the App Store Connect app record.
