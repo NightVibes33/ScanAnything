@@ -34,7 +34,11 @@ enum GaussianReconstructor {
         outputURL: URL,
         quality: CameraOnlyQualityProfile = .highDetail,
         backgroundIsolated: Bool = false,
-        progress: @escaping @MainActor @Sendable (_ fraction: Double, _ splats: Int) -> Void
+        progress: @escaping @MainActor @Sendable (
+            _ fraction: Double,
+            _ splats: Int,
+            _ estimatedRemaining: TimeInterval?
+        ) -> Void
     ) async throws -> Int {
         let datasetPath = datasetRoot.path(percentEncoded: false)
         let outputPath = outputURL.path(percentEncoded: false)
@@ -84,8 +88,11 @@ enum GaussianReconstructor {
             let syncEvery = max(1, quality.gpuSyncInterval)
             var splatCount = trainer.splatCount
             var emergencyFinalized = false
+            var lastSyncTime = ProcessInfo.processInfo.systemUptime
+            var lastSyncIteration = 0
+            var smoothedSecondsPerStep: Double?
 
-            await progress(0, splatCount)
+            await progress(0, splatCount, nil)
 
             for index in 0..<total {
                 if index % syncEvery == 0 {
@@ -113,8 +120,39 @@ enum GaussianReconstructor {
                 msplatSync()
                 try Task.checkCancellation()
 
+                let now = ProcessInfo.processInfo.systemUptime
+                let completedSinceSync = max(1, completed - lastSyncIteration)
+                let measuredSecondsPerStep =
+                    max(0.000_001, now - lastSyncTime) /
+                    Double(completedSinceSync)
+                let trainerSecondsPerStep = max(
+                    0.000_001,
+                    Double(stats.msPerStep) / 1_000
+                )
+                let sampleSecondsPerStep = max(
+                    measuredSecondsPerStep,
+                    trainerSecondsPerStep
+                )
+                if let previous = smoothedSecondsPerStep {
+                    smoothedSecondsPerStep =
+                        previous * 0.72 + sampleSecondsPerStep * 0.28
+                } else {
+                    smoothedSecondsPerStep = sampleSecondsPerStep
+                }
+                lastSyncTime = now
+                lastSyncIteration = completed
+
                 let trainingFraction = Double(completed) / Double(total)
-                await progress(trainingFraction * 0.96, splatCount)
+                let remainingSteps = max(0, total - completed)
+                let estimatedRemaining =
+                    smoothedSecondsPerStep.map {
+                        Double(remainingSteps) * $0 + 1.0
+                    }
+                await progress(
+                    trainingFraction * 0.96,
+                    splatCount,
+                    estimatedRemaining
+                )
 
                 let availableMB = Self.availableMemoryMB()
                 if completed % 500 == 0 {
@@ -158,7 +196,11 @@ enum GaussianReconstructor {
 
             try Task.checkCancellation()
             msplatSync()
-            await progress(emergencyFinalized ? 0.97 : 0.975, splatCount)
+            await progress(
+                emergencyFinalized ? 0.97 : 0.975,
+                splatCount,
+                1.0
+            )
 
             // Keep the trained Gaussian parameters as float32. SPZ intentionally
             // quantizes position, scale, rotation, color, and SH coefficients;
@@ -167,7 +209,7 @@ enum GaussianReconstructor {
             trainer.exportPly(to: outputPath)
             msplatSync()
             splatCount = trainer.splatCount
-            await progress(1.0, splatCount)
+            await progress(1.0, splatCount, 0)
 
             guard FileManager.default.fileExists(atPath: outputPath) else {
                 throw GaussianReconstructionError.missingOutput

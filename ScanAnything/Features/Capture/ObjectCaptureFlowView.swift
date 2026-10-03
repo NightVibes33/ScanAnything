@@ -360,8 +360,12 @@ private struct ReconstructionOverlay: View {
                     .contentTransition(.opacity)
 
                 if let remaining = progress.remainingText {
-                    Text("\(remaining) kaldı")
+                    Text("\(remaining) remaining")
                         .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Calculating ETA…")
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -369,7 +373,7 @@ private struct ReconstructionOverlay: View {
 
             StageTrack(current: progress.stage)
 
-            Text("Uygulamayı arka plana almayın — iOS işlemi askıya alır.")
+            Text("Keep ScanAnything open while the model finishes.")
                 .font(.footnote)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)

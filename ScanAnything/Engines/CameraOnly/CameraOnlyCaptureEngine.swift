@@ -151,7 +151,10 @@ final class CameraOnlyCaptureEngine {
     private(set) var trackingMessage: String
     private(set) var processingProgress = 0.0
     private(set) var processingMessage = "Preparing 3D reconstruction"
+    private(set) var processingEstimatedRemaining: TimeInterval?
     private(set) var gaussianCount = 0
+
+    private var processingStartedAt: TimeInterval?
     private(set) var captureFormatDescription = "High quality"
 
     private var requiredViewCoverage: Double {
@@ -161,6 +164,10 @@ final class CameraOnlyCaptureEngine {
     var coverage: Double {
         guard requiredViewCoverage > 0 else { return 0 }
         return min(1, viewCoverage / requiredViewCoverage)
+    }
+
+    var processingRemainingText: String? {
+        ProcessingTimeText.remaining(processingEstimatedRemaining)
     }
 
     var canFinish: Bool {
@@ -193,6 +200,8 @@ final class CameraOnlyCaptureEngine {
         viewCoverage = 0
         processingProgress = 0
         processingMessage = "Preparing 3D reconstruction"
+        processingEstimatedRemaining = nil
+        processingStartedAt = nil
         gaussianCount = 0
         trackingMessage = purpose.initialGuidance
 
@@ -266,8 +275,11 @@ final class CameraOnlyCaptureEngine {
         session.delegate = nil
         UIApplication.shared.isIdleTimerDisabled = true
         phase = .reconstructing
-        processingProgress = 0.01
-        processingMessage = "Preparing 3D reconstruction"
+        processingStartedAt = ProcessInfo.processInfo.systemUptime
+        updateProcessing(
+            progress: 0.01,
+            message: "Preparing 3D reconstruction"
+        )
 
         let snapshot = recorder.snapshot()
         let count = snapshot.frames.count
@@ -296,6 +308,10 @@ final class CameraOnlyCaptureEngine {
                         root: workspace.root,
                         quality: reconstructionQuality
                     )
+                    await self.updateProcessing(
+                        progress: 0.08,
+                        message: "Estimating 3D geometry"
+                    )
 
                     let enrichedSnapshot = CameraOnlyCaptureSnapshot(
                         frames: snapshot.frames,
@@ -321,14 +337,26 @@ final class CameraOnlyCaptureEngine {
                                 root: workspace.root,
                                 minimumFrames: reconstructionQuality.minimumFrameCount
                             )
+                        await self.updateProcessing(
+                            progress: 0.16,
+                            message: "Removing the background"
+                        )
                     } else {
                         trainingSnapshot = enrichedSnapshot
+                        await self.updateProcessing(
+                            progress: 0.16,
+                            message: "Preparing training data"
+                        )
                     }
 
                     try Task.checkCancellation()
                     try CameraOnlyDatasetWriter.write(
                         snapshot: trainingSnapshot,
                         to: workspace.root
+                    )
+                    await self.updateProcessing(
+                        progress: 0.20,
+                        message: reconstructionPurpose.processingTitle
                     )
 
                     let backgroundIsolated =
@@ -352,35 +380,50 @@ final class CameraOnlyCaptureEngine {
                 }.value
 
                 try Task.checkCancellation()
-                self.processingProgress = 0.05
-                self.processingMessage = reconstructionPurpose.processingTitle
+                self.updateProcessing(
+                    progress: max(self.processingProgress, 0.20),
+                    message: reconstructionPurpose.processingTitle
+                )
 
                 let splats = try await GaussianReconstructor.reconstruct(
                     datasetRoot: workspace.root,
                     outputURL: outputURL,
                     quality: quality,
                     backgroundIsolated: prepared.backgroundIsolated
-                ) { [weak self] progress, splatCount in
+                ) { [weak self] progress, splatCount, estimatedRemaining in
                     guard let self else { return }
-                    self.processingProgress = min(0.95, 0.05 + (progress * 0.90))
                     self.gaussianCount = splatCount
 
+                    let mappedProgress = min(0.98, 0.20 + (progress * 0.78))
+                    let message: String
                     if progress >= 0.99 {
-                        self.processingMessage = "Finalizing Gaussian model"
+                        message = "Finalizing 3D model"
                     } else if progress >= 0.90 {
-                        self.processingMessage = "Finishing full-resolution training"
+                        message = "Finishing model detail"
                     } else {
-                        self.processingMessage = reconstructionPurpose.processingTitle
+                        message = reconstructionPurpose.processingTitle
                     }
+
+                    self.updateProcessing(
+                        progress: mappedProgress,
+                        message: message,
+                        directRemaining: estimatedRemaining
+                    )
                 }
 
                 try Task.checkCancellation()
-                self.processingProgress = 0.96
-                self.processingMessage = "Creating scan preview"
+                self.updateProcessing(
+                    progress: 0.985,
+                    message: "Creating scan preview",
+                    directRemaining: 1.0
+                )
 
                 try Task.checkCancellation()
-                self.processingProgress = 0.99
-                self.processingMessage = "Saving scan"
+                self.updateProcessing(
+                    progress: 0.995,
+                    message: "Saving scan",
+                    directRemaining: 0.5
+                )
 
                 let record = ScanRecord(
                     id: workspace.id,
@@ -401,6 +444,8 @@ final class CameraOnlyCaptureEngine {
                 self.workspace = nil
                 self.recorder = nil
                 self.processingProgress = 1.0
+                self.processingEstimatedRemaining = nil
+                self.processingStartedAt = nil
                 UIApplication.shared.isIdleTimerDisabled = false
                 phase = .done(record)
             } catch is CancellationError {
@@ -431,6 +476,37 @@ final class CameraOnlyCaptureEngine {
         }
 
         phase = .cancelled
+    }
+
+    private func updateProcessing(
+        progress: Double,
+        message: String,
+        directRemaining: TimeInterval? = nil
+    ) {
+        let clamped = min(1, max(processingProgress, progress))
+        processingProgress = clamped
+        processingMessage = message
+
+        let candidate: TimeInterval?
+        if let directRemaining, directRemaining.isFinite, directRemaining > 0 {
+            candidate = directRemaining
+        } else if let started = processingStartedAt, clamped >= 0.03 {
+            let elapsed = max(
+                0.001,
+                ProcessInfo.processInfo.systemUptime - started
+            )
+            candidate = elapsed * (1 - clamped) / clamped
+        } else {
+            candidate = nil
+        }
+
+        guard let candidate else { return }
+        if let previous = processingEstimatedRemaining {
+            processingEstimatedRemaining =
+                previous * 0.68 + candidate * 0.32
+        } else {
+            processingEstimatedRemaining = candidate
+        }
     }
 
     private func handle(_ event: CameraOnlyCaptureEvent) {

@@ -93,6 +93,7 @@ final class RoomCaptureEngine: ScanEngine {
     private var workspace: ScanWorkspace?
     private var hasStartedSession = false
     private var cameraWatchdog: Task<Void, Never>?
+    private var structuralProgressTask: Task<Void, Never>?
 
     /// The photographic model gets its own workspace so the two models never
     /// compete for `model.usdz`.
@@ -182,12 +183,32 @@ final class RoomCaptureEngine: ScanEngine {
         cameraWatchdog?.cancel()
         cameraWatchdog = nil
         keyframeCollector?.stop()
-        phase = .reconstructing(ReconstructionProgress())
+
+        let structuralStartedAt = ProcessInfo.processInfo.systemUptime
+        let expectedStructuralDuration = Self.estimatedStructuralDuration()
+        startStructuralProgress(
+            startedAt: structuralStartedAt,
+            expectedDuration: expectedStructuralDuration
+        )
 
         let room: CapturedRoom
         do {
             room = try await stopAndProcess()
+            structuralProgressTask?.cancel()
+            structuralProgressTask = nil
+            Self.recordStructuralDuration(
+                ProcessInfo.processInfo.systemUptime - structuralStartedAt
+            )
+            phase = .reconstructing(
+                ReconstructionProgress(
+                    fraction: 0.55,
+                    stage: .meshGeneration,
+                    estimatedRemaining: capturesPhotographicModel ? 30 : 4
+                )
+            )
         } catch {
+            structuralProgressTask?.cancel()
+            structuralProgressTask = nil
             phase = .failed(message: error.localizedDescription)
             throw error
         }
@@ -205,6 +226,14 @@ final class RoomCaptureEngine: ScanEngine {
             phase = .failed(message: error.localizedDescription)
             throw ScanEngineError.reconstructionFailed(error.localizedDescription)
         }
+
+        phase = .reconstructing(
+            ReconstructionProgress(
+                fraction: capturesPhotographicModel ? 0.65 : 0.95,
+                stage: capturesPhotographicModel ? .imageAlignment : .optimization,
+                estimatedRemaining: capturesPhotographicModel ? 30 : 1
+            )
+        )
 
         let summary = RoomSummary(room: room)
         self.summary = summary
@@ -259,11 +288,18 @@ final class RoomCaptureEngine: ScanEngine {
                 // The cameras walked *through* this subject, so the orbit coverage
                 // measures do not apply.
                 framing: .interior,
+                maximumInputImages: RoomKeyframeCollector.maximumFrames,
                 onWarning: { [weak self] note in
                     self?.photographicNote = note
                 }
             ) { [weak self] progress in
-                self?.phase = .reconstructing(progress)
+                guard let self else { return }
+                var mapped = progress
+                mapped.fraction = min(
+                    1,
+                    0.65 + progress.fraction * 0.35
+                )
+                self.phase = .reconstructing(mapped)
             }
 
             let photoRecord = ScanRecord(
@@ -292,6 +328,8 @@ final class RoomCaptureEngine: ScanEngine {
     }
 
     func cancel() {
+        structuralProgressTask?.cancel()
+        structuralProgressTask = nil
         cameraWatchdog?.cancel()
         cameraWatchdog = nil
         keyframeCollector?.stop()
@@ -316,6 +354,70 @@ final class RoomCaptureEngine: ScanEngine {
     }
 
     // MARK: - Private
+
+    private func startStructuralProgress(
+        startedAt: TimeInterval,
+        expectedDuration: TimeInterval
+    ) {
+        structuralProgressTask?.cancel()
+        phase = .reconstructing(
+            ReconstructionProgress(
+                fraction: 0.03,
+                stage: .preProcessing,
+                estimatedRemaining: expectedDuration
+            )
+        )
+
+        structuralProgressTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard let self else { return }
+
+                let elapsed = max(
+                    0,
+                    ProcessInfo.processInfo.systemUptime - startedAt
+                )
+                let fraction = min(
+                    0.50,
+                    0.03 + 0.47 * (elapsed / max(expectedDuration, 1))
+                )
+                let remaining = max(1, expectedDuration - elapsed)
+
+                guard case .reconstructing = self.phase else { return }
+                self.phase = .reconstructing(
+                    ReconstructionProgress(
+                        fraction: fraction,
+                        stage: .preProcessing,
+                        estimatedRemaining: remaining
+                    )
+                )
+            }
+        }
+    }
+
+    private static let structuralDurationKey =
+        "scananything.room.structuralDuration"
+
+    private static func estimatedStructuralDuration() -> TimeInterval {
+        let stored = UserDefaults.standard.double(
+            forKey: structuralDurationKey
+        )
+        return stored > 0 ? min(60, max(5, stored)) : 18
+    }
+
+    private static func recordStructuralDuration(_ duration: TimeInterval) {
+        guard duration.isFinite, duration > 0 else { return }
+        let previous = UserDefaults.standard.double(
+            forKey: structuralDurationKey
+        )
+        let next = previous > 0
+            ? previous * 0.70 + duration * 0.30
+            : duration
+        UserDefaults.standard.set(
+            min(60, max(5, next)),
+            forKey: structuralDurationKey
+        )
+    }
 
     /// Reports whether the camera is actually delivering frames.
     ///

@@ -98,8 +98,11 @@ struct RoomFlowView: View {
             }
             .ignoresSafeArea()
 
-            if case .reconstructing = engine.phase {
-                RoomProcessingOverlay(isReconstructingPhotos: engine.capturesPhotographicModel)
+            if case .reconstructing(let progress) = engine.phase {
+                RoomProcessingOverlay(
+                    progress: progress,
+                    isReconstructingPhotos: engine.capturesPhotographicModel
+                )
             } else {
                 RoomOverlay(engine: engine, isCapturing: isCapturing(engine)) {
                     engine.cancel()
@@ -611,19 +614,36 @@ private struct RoomOverlay: View {
 // MARK: - Processing, result, message
 
 private struct RoomProcessingOverlay: View {
+    let progress: ReconstructionProgress
     let isReconstructingPhotos: Bool
 
     var body: some View {
         ZStack {
             Color.black.opacity(0.6).ignoresSafeArea()
             VStack(spacing: 14) {
-                // Indeterminate on purpose: RoomPlan reports no progress while it
-                // turns the captured data into a room, and a fake bar would be a lie.
-                ProgressView().tint(.white)
-                Text("Building room model")
+                ProgressView(value: progress.fraction)
+                    .progressViewStyle(.linear)
+                    .tint(.white)
+                    .frame(maxWidth: 260)
+
+                Text(progress.stage?.displayName ?? "Building room model")
                     .font(.headline)
+
+                Text("\(Int(progress.fraction * 100))%")
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.secondary)
+
+                if let remaining = progress.remainingText {
+                    Text("\(remaining) remaining")
+                        .font(.title3.weight(.semibold).monospacedDigit())
+                } else {
+                    Text("Calculating ETA…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
                 Text(isReconstructingPhotos
-                     ? "The structural model finishes first, then the photographic model continues. Keep ScanAnything open."
+                     ? "Structural geometry finishes first, then the photographic pass continues."
                      : "Keep ScanAnything open while the model finishes.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)

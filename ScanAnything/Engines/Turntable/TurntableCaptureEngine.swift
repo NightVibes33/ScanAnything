@@ -30,16 +30,15 @@ final class TurntableCaptureEngine: ScanEngine {
         return .available
     }
 
-    /// Fewer than this and the solver has too little overlap to close a loop.
-    ///
-    /// Raised from 20 after measuring a real pass: 20 shots spread over a full
-    /// revolution is 18° between frames, which is at the edge of what feature
-    /// matching survives. A full turn at ~11° is the honest floor.
-    static let minimumShots = 32
+    /// Bounded capture budget for interactive on-device reconstruction.
+    /// Twenty views gives ~18° overlap around a full turn; learned/feature-based
+    /// matching plus the fixed-camera mask keeps this viable while avoiding a
+    /// 30–80 image photogrammetry solve.
+    static let minimumShots = 20
+    static let maximumShots = 24
 
-    /// Shots that make up roughly one revolution at the recommended ~10° step.
-    /// Used only to prompt for a second pass at a different height.
-    static let shotsPerRevolution = 36
+    /// One complete pass before suggesting a small elevation change.
+    static let shotsPerRevolution = 20
 
     /// Seconds between automatic shots. Roughly 10° of rotation per shot at a
     /// comfortable hand speed, which is the usual turntable step.
@@ -175,6 +174,7 @@ final class TurntableCaptureEngine: ScanEngine {
                 workspace: workspace,
                 detail: .reduced,
                 maskRect: objectMaskRect,
+                maximumInputImages: Self.maximumShots,
                 onWarning: { [weak self] note in
                     self?.warnings.append(note)
                 }
@@ -239,6 +239,7 @@ final class TurntableCaptureEngine: ScanEngine {
     }
 
     func captureNow() {
+        guard shotCount < Self.maximumShots else { return }
         coordinator?.capture()
     }
 
@@ -255,6 +256,10 @@ final class TurntableCaptureEngine: ScanEngine {
         autoCaptureTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self, self.isAutoCapturing else { return }
+                guard self.shotCount < Self.maximumShots else {
+                    self.stopAutoCapture()
+                    return
+                }
                 self.coordinator?.capture()
                 try? await Task.sleep(for: .seconds(self.autoCaptureInterval))
             }
@@ -271,6 +276,9 @@ final class TurntableCaptureEngine: ScanEngine {
 
     private func shotSaved(_ index: Int) {
         shotCount = index
+        if shotCount >= Self.maximumShots {
+            stopAutoCapture()
+        }
         captureError = nil
         if case .capturing = phase {
             phase = .capturing(shots: index, limit: 0)

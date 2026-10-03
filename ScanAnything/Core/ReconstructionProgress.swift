@@ -1,33 +1,32 @@
 import Foundation
 
-/// Reconstruction state as reported by `PhotogrammetrySession`.
-///
-/// The session emits progress on two separate outputs — `.requestProgress` carries
-/// the fraction, `.requestProgressInfo` carries the stage and a time estimate —
-/// and they interleave. This struct is the merged view of both.
+/// Shared processing progress for every reconstruction backend.
 struct ReconstructionProgress: Equatable, Sendable {
     var fraction: Double = 0
     var stage: ReconstructionStage?
     var estimatedRemaining: TimeInterval?
 
-    /// Formatted countdown, or nil while the session has no estimate yet.
-    /// Deliberately coarse: the underlying estimate swings by tens of seconds and
-    /// a jittering "1:23 kaldı" reads as broken.
+    /// Live countdown. The number is intentionally precise because it is fed by
+    /// measured throughput or a framework-provided estimate, not a fixed animation.
     var remainingText: String? {
-        guard let estimatedRemaining, estimatedRemaining > 5 else { return nil }
-        let minutes = Int(estimatedRemaining) / 60
-        switch minutes {
-        case 0: return String(localized: "1 dakikadan az")
-        case 1...2: return String(localized: "yaklaşık \(minutes + 1) dakika")
-        default: return String(localized: "yaklaşık \(minutes) dakika")
-        }
+        ProcessingTimeText.remaining(estimatedRemaining)
     }
 }
 
-/// The pipeline stages photogrammetry moves through, in order.
-///
-/// Showing these beats a bare percentage: a 4-minute run that sits at 40% looks
-/// stuck, whereas "Nokta bulutu oluşturuluyor" reads as working.
+enum ProcessingTimeText {
+    static func remaining(_ interval: TimeInterval?) -> String? {
+        guard let interval, interval.isFinite, interval > 0 else { return nil }
+        let seconds = max(1, Int(ceil(interval)))
+        if seconds < 60 {
+            return "\(seconds)s"
+        }
+
+        let minutes = seconds / 60
+        let remainder = seconds % 60
+        return String(format: "%d:%02d", minutes, remainder)
+    }
+}
+
 enum ReconstructionStage: Int, Equatable, Sendable, CaseIterable, Identifiable {
     case preProcessing
     case imageAlignment
@@ -40,12 +39,12 @@ enum ReconstructionStage: Int, Equatable, Sendable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .preProcessing: String(localized: "Görüntüler hazırlanıyor")
-        case .imageAlignment: String(localized: "Kamera pozları çözülüyor")
-        case .pointCloudGeneration: String(localized: "Nokta bulutu oluşturuluyor")
-        case .meshGeneration: String(localized: "Mesh çıkarılıyor")
-        case .textureMapping: String(localized: "Texture yerleştiriliyor")
-        case .optimization: String(localized: "Model optimize ediliyor")
+        case .preProcessing: "Preparing images"
+        case .imageAlignment: "Aligning views"
+        case .pointCloudGeneration: "Building geometry"
+        case .meshGeneration: "Building mesh"
+        case .textureMapping: "Applying textures"
+        case .optimization: "Optimizing model"
         }
     }
 
@@ -60,7 +59,6 @@ enum ReconstructionStage: Int, Equatable, Sendable, CaseIterable, Identifiable {
         }
     }
 
-    /// The stage most of the wall-clock goes into, worth a reassuring note.
     var isLongRunning: Bool {
         self == .imageAlignment || self == .meshGeneration
     }

@@ -54,7 +54,7 @@ struct ScanAnythingCoreTests {
         #expect(record.engine.producesMesh)
     }
 
-    @Test("High-detail Camera 3D preserves 4K input and uses a full msplat quality budget")
+    @Test("Camera 3D preserves full-resolution inputs with a bounded mobile render budget")
     func highDetailCameraQualityProfile() {
         let quality = CameraOnlyQualityProfile.highDetail
 
@@ -74,20 +74,20 @@ struct ScanAnythingCoreTests {
         #expect(quality.minimumViewCoverage >= 0.20)
         #expect(quality.minimumViewCoverage <= 0.30)
 
-        #expect(quality.trainingIterations == 30_000)
+        #expect(quality.trainingIterations == 5_000)
         #expect(quality.shDegree == 3)
         #expect(quality.ssimWeight == 0.20)
-        #expect(quality.numDownscales == 3)
-        #expect(quality.stopDensifyAt >= 10_000)
-        #expect(quality.stopDensifyAt <= 12_000)
+        #expect(quality.numDownscales == 2)
+        #expect(quality.stopDensifyAt >= 1_500)
+        #expect(quality.stopDensifyAt <= 2_500)
         #expect(
             quality.resolutionSchedule * quality.numDownscales <
             quality.stopDensifyAt
         )
         #expect(quality.stopDensifyAt < quality.trainingIterations)
 
-        // Long native-resolution runs must bound transient iPhone pressure and
-        // periodically wait for Metal so UI progress tracks completed GPU work.
+        // Real-time native-resolution runs still bound transient pressure and
+        // synchronize often enough for ETA/progress to track completed GPU work.
         #expect(quality.imageCacheMB <= 256)
         #expect(quality.gpuSyncInterval <= 100)
         #expect(quality.memorySafetyHeadroomMB >= 256)
@@ -99,12 +99,12 @@ struct ScanAnythingCoreTests {
             quality.minimumEmergencyFinalizeIteration <
             quality.trainingIterations
         )
-        #expect(quality.criticalThermalPauseMilliseconds >= 500)
+        #expect(quality.criticalThermalPauseMilliseconds >= 200)
 
         #expect(quality.learnedDepthPriorEnabled)
-        #expect(quality.depthPriorKeyframeCount >= 16)
+        #expect(quality.depthPriorKeyframeCount <= 10)
         #expect(quality.depthPriorMinimumAnchors >= 24)
-        #expect(quality.depthPriorMaximumPoints >= 100_000)
+        #expect(quality.depthPriorMaximumPoints <= 70_000)
         #expect(quality.depthPriorVoxelSize <= 0.004)
     }
 
@@ -123,6 +123,11 @@ struct ScanAnythingCoreTests {
         #expect(CameraOnlyCapturePurpose.object.isolatesForeground)
         #expect(CameraOnlyCapturePurpose.product.isolatesForeground)
         #expect(CameraOnlyCapturePurpose.room.isolatesForeground == false)
+
+        #expect(TurntableCaptureEngine.minimumShots == 20)
+        #expect(TurntableCaptureEngine.maximumShots == 24)
+        #expect(RoomKeyframeCollector.minimumFrames == 12)
+        #expect(RoomKeyframeCollector.maximumFrames == 24)
     }
 
     @Test("Library records can carry a user-facing asset kind independent of backend")

@@ -115,7 +115,13 @@ final class TrueDepthEngine: ScanEngine {
             throw ScanEngineError.sessionUnavailable("Aktif oturum yok.")
         }
 
-        phase = .reconstructing(ReconstructionProgress(fraction: 0.2, stage: .pointCloudGeneration))
+        phase = .reconstructing(
+            ReconstructionProgress(
+                fraction: 0.2,
+                stage: .pointCloudGeneration,
+                estimatedRemaining: 2
+            )
+        )
         session.pause()
 
         // The receiver owns the cloud on the frame queue; this is the handoff.
@@ -126,7 +132,13 @@ final class TrueDepthEngine: ScanEngine {
             throw ScanEngineError.reconstructionFailed(String(localized: "Nokta bulutu boş."))
         }
 
-        phase = .reconstructing(ReconstructionProgress(fraction: 0.7, stage: .optimization))
+        phase = .reconstructing(
+            ReconstructionProgress(
+                fraction: 0.7,
+                stage: .optimization,
+                estimatedRemaining: 1
+            )
+        )
 
         let points = cloud.points
         let outputURL = workspace.root.appending(path: "cloud.ply", directoryHint: .notDirectory)

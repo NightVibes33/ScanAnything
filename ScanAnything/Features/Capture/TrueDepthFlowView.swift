@@ -42,8 +42,14 @@ struct TrueDepthFlowView: View {
                 ProgressView(value: progress.fraction)
                     .progressViewStyle(.linear)
                     .frame(maxWidth: 240)
-                Text(progress.stage?.displayName ?? String(localized: "Nokta bulutu yazılıyor"))
+                Text(progress.stage?.displayName ?? "Saving point cloud")
                     .font(.headline)
+
+                if let remaining = progress.remainingText {
+                    Text("\(remaining) remaining")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(32)
 

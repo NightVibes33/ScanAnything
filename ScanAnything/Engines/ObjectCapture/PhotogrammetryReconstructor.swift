@@ -38,6 +38,7 @@ struct PhotogrammetryReconstructor {
         maskRect: CGRect? = nil,
         enableObjectMasking: Bool = true,
         framing: PoseDiagnostics.Framing = .orbit,
+        maximumInputImages: Int = 28,
         onWarning: @escaping @MainActor (String) -> Void = { _ in },
         onProgress: @escaping @MainActor (ReconstructionProgress) -> Void
     ) async throws -> Output {
@@ -46,7 +47,7 @@ struct PhotogrammetryReconstructor {
             throw ScanEngineError.reconstructionFailed(String(localized: "Bu cihaz cihaz-üstü fotogrametriyi desteklemiyor."))
         }
 
-        let imageURLs = ((try? FileManager.default.contentsOfDirectory(
+        let allImageURLs = ((try? FileManager.default.contentsOfDirectory(
             at: workspace.imagesURL,
             includingPropertiesForKeys: nil
         )) ?? [])
@@ -55,6 +56,10 @@ struct PhotogrammetryReconstructor {
             // the solver — directory enumeration order is not.
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
+        let imageURLs = Self.evenlySample(
+            allImageURLs,
+            maximumCount: max(8, maximumInputImages)
+        )
         let imageCount = imageURLs.count
         guard imageCount > 0 else { throw ScanEngineError.noImagesCaptured }
 
@@ -62,7 +67,7 @@ struct PhotogrammetryReconstructor {
         // Guided capture and turntable capture both write images in orbit order,
         // which spares the solver an all-pairs matching search.
         configuration.sampleOrdering = .sequential
-        configuration.featureSensitivity = .high
+        configuration.featureSensitivity = .normal
         configuration.isObjectMaskingEnabled = enableObjectMasking
 
         // Remove a stale model from a previous attempt; the session refuses to
@@ -115,6 +120,23 @@ struct PhotogrammetryReconstructor {
         }
     }
 
+    private static func evenlySample(
+        _ urls: [URL],
+        maximumCount: Int
+    ) -> [URL] {
+        guard maximumCount > 0, urls.count > maximumCount else { return urls }
+        guard maximumCount > 1 else { return [urls[0]] }
+
+        let step = Double(urls.count - 1) / Double(maximumCount - 1)
+        return (0..<maximumCount).map { index in
+            let sourceIndex = min(
+                urls.count - 1,
+                Int((Double(index) * step).rounded())
+            )
+            return urls[sourceIndex]
+        }
+    }
+
     private func run(
         workspace: ScanWorkspace,
         imageURLs: [URL],
@@ -128,17 +150,16 @@ struct PhotogrammetryReconstructor {
 
         let session: PhotogrammetrySession
         do {
-            if let maskRect {
-                // Samples rather than a folder: a per-frame object mask can only be
-                // attached to a `PhotogrammetrySample`, and the mask is the one thing
-                // that reliably keeps a nearby background out of the model.
-                session = try PhotogrammetrySession(
-                    input: MaskedSampleSequence(imageURLs: imageURLs, normalizedRect: maskRect),
-                    configuration: configuration
-                )
-            } else {
-                session = try PhotogrammetrySession(input: workspace.imagesURL, configuration: configuration)
-            }
+            // Always use the streaming sample sequence. Besides supporting an
+            // optional mask, this lets us cap the exact images given to the solver
+            // without copying a second folder of full-resolution photos.
+            session = try PhotogrammetrySession(
+                input: MaskedSampleSequence(
+                    imageURLs: imageURLs,
+                    normalizedRect: maskRect
+                ),
+                configuration: configuration
+            )
         } catch {
             throw ScanEngineError.reconstructionFailed(error.localizedDescription)
         }
@@ -155,6 +176,28 @@ struct PhotogrammetryReconstructor {
         // both are accumulated here and emitted as one value.
         var progress = ReconstructionProgress()
         var diagnostics: PoseDiagnostics?
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        var smoothedRemaining: TimeInterval?
+
+        func smoothRemaining(_ value: TimeInterval) -> TimeInterval {
+            let safe = max(0.25, value)
+            if let previous = smoothedRemaining {
+                let next = previous * 0.65 + safe * 0.35
+                smoothedRemaining = next
+                return next
+            }
+            smoothedRemaining = safe
+            return safe
+        }
+
+        func measuredRemaining(for fraction: Double) -> TimeInterval? {
+            guard fraction > 0.02, fraction < 1 else { return nil }
+            let elapsed = max(
+                0.001,
+                ProcessInfo.processInfo.systemUptime - startedAt
+            )
+            return elapsed * (1 - fraction) / fraction
+        }
 
         for try await output in session.outputs {
             switch output {
@@ -163,12 +206,19 @@ struct PhotogrammetryReconstructor {
                 // make the bar jump backwards.
                 guard request == modelRequest else { break }
                 progress.fraction = fraction
+                if let measured = measuredRemaining(for: fraction) {
+                    progress.estimatedRemaining = smoothRemaining(measured)
+                }
                 await onProgress(progress)
 
             case .requestProgressInfo(let request, let info):
                 guard request == modelRequest else { break }
                 progress.stage = info.processingStage.flatMap(ReconstructionStage.init)
-                progress.estimatedRemaining = info.estimatedRemainingTime
+                if let remaining = info.estimatedRemainingTime,
+                   remaining.isFinite,
+                   remaining > 0 {
+                    progress.estimatedRemaining = smoothRemaining(remaining)
+                }
                 await onProgress(progress)
 
             case .requestComplete(let request, let result):
@@ -177,6 +227,7 @@ struct PhotogrammetryReconstructor {
                 }
                 guard request == modelRequest else { break }
                 progress.fraction = 1
+                progress.estimatedRemaining = 0
                 await onProgress(progress)
 
             case .processingComplete:

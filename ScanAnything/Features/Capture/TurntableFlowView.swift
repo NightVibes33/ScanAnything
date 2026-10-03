@@ -314,7 +314,7 @@ private struct TurntableOverlay: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 1) {
-                Text("\(engine.shotCount) photos")
+                Text("\(engine.shotCount)/\(TurntableCaptureEngine.maximumShots) photos")
                     .font(.footnote.weight(.semibold).monospacedDigit())
                 HStack(spacing: 5) {
                     if engine.megapixels > 0 {
@@ -410,7 +410,7 @@ private struct TurntableOverlay: View {
             .disabled(isFinishing || !engine.canFinish)
 
             if !engine.canFinish {
-                Text("At least \(TurntableCaptureEngine.minimumShots) photos gerekiyor.")
+                Text("Capture at least \(TurntableCaptureEngine.minimumShots) photos.")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.55))
                     .multilineTextAlignment(.center)
@@ -449,8 +449,15 @@ private struct TurntableReconstructionView: View {
                 .frame(maxWidth: 240)
             Text(progress.stage?.displayName ?? String(localized: "Building model"))
                 .font(.headline)
+            Text("\(Int(progress.fraction * 100))%")
+                .font(.footnote.monospacedDigit())
+                .foregroundStyle(.secondary)
             if let remaining = progress.remainingText {
                 Text("\(remaining) remaining")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Calculating ETA…")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

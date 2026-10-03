@@ -2,10 +2,9 @@ import Foundation
 
 /// One source of truth for the camera-only Gaussian pipeline.
 ///
-/// The high-detail profile is tuned around an 8 GB-class modern iPhone such as
-/// the iPhone 16. It preserves native 4K source frames, rejects weak inputs, and
-/// gives msplat enough full-resolution optimization time to converge instead of
-/// stopping shortly after the progressive-resolution warmup.
+/// Real-time mobile quality profile. Source photos stay full-resolution, but the
+/// learned geometry prior lets msplat converge with a much shorter optimization
+/// budget suitable for an interactive 20–60 second build target.
 struct CameraOnlyQualityProfile: Sendable, Equatable {
     let targetFrameCount: Int
     let minimumFrameCount: Int
@@ -38,8 +37,7 @@ struct CameraOnlyQualityProfile: Sendable, Equatable {
     let splitScreenSize: Float
     let datasetDownscaleFactor: Float
 
-    // iPhone stability controls. These do not lower source capture resolution or
-    // the 30K optimization budget; they bound transient memory/GPU backlog.
+    // iPhone/iPad stability controls for the bounded real-time optimization pass.
     let imageCacheMB: Int
     let gpuSyncInterval: Int
     let memorySafetyHeadroomMB: Int
@@ -68,35 +66,34 @@ struct CameraOnlyQualityProfile: Sendable, Equatable {
         azimuthSectorCount: 12,
         elevationBandCount: 2,
         minimumViewCoverage: 0.25,
-        trainingIterations: 30_000,
+        trainingIterations: 5_000,
         shDegree: 3,
         shDegreeInterval: 1_000,
         ssimWeight: 0.20,
-        numDownscales: 3,
-        resolutionSchedule: 3_000,
-        warmupLength: 750,
+        numDownscales: 2,
+        resolutionSchedule: 700,
+        warmupLength: 200,
         refineEvery: 100,
         resetAlphaEvery: 30,
         densifyGradThresh: 0.00018,
         densifySizeThresh: 0.01,
-        stopScreenSizeAt: 12_000,
-        // Learned depth already gives the model a dense seed. Stop population
-        // growth sooner, then spend the rest of the 30K budget refining the
-        // existing splats at full resolution instead of ballooning memory.
-        stopDensifyAt: 12_000,
+        stopScreenSizeAt: 2_500,
+        // Learned depth already gives the model a dense seed, so most topology
+        // growth can finish early and the rest of the budget refines appearance.
+        stopDensifyAt: 2_000,
         splitScreenSize: 0.045,
         datasetDownscaleFactor: 1.0,
-        imageCacheMB: 256,
-        gpuSyncInterval: 50,
+        imageCacheMB: 192,
+        gpuSyncInterval: 25,
         memorySafetyHeadroomMB: 320,
-        minimumEmergencyFinalizeIteration: 18_000,
-        seriousThermalPauseMilliseconds: 200,
-        criticalThermalPauseMilliseconds: 1_000,
+        minimumEmergencyFinalizeIteration: 3_500,
+        seriousThermalPauseMilliseconds: 50,
+        criticalThermalPauseMilliseconds: 250,
         learnedDepthPriorEnabled: true,
-        depthPriorKeyframeCount: 24,
-        depthPriorMinimumAnchors: 32,
-        depthPriorGridStride: 8,
-        depthPriorMaximumPoints: 120_000,
-        depthPriorVoxelSize: 0.003
+        depthPriorKeyframeCount: 10,
+        depthPriorMinimumAnchors: 24,
+        depthPriorGridStride: 10,
+        depthPriorMaximumPoints: 70_000,
+        depthPriorVoxelSize: 0.004
     )
 }

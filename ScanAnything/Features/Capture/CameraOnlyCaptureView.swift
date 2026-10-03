@@ -70,6 +70,15 @@ struct CameraOnlyCaptureView: View {
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.secondary)
 
+                if let remaining = engine.processingRemainingText {
+                    Text("\(remaining) remaining")
+                        .font(.title3.weight(.semibold).monospacedDigit())
+                } else {
+                    Text("Calculating ETA…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
                 Text("Keep ScanAnything open while this device finishes the model.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)

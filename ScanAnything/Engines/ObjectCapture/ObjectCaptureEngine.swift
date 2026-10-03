@@ -103,7 +103,7 @@ final class ObjectCaptureEngine: ScanEngine {
         configuration.checkpointDirectory = workspace.checkpointURL
         // More input images than the guided minimum. Costs capture time and disk,
         // buys mesh coverage — the right trade for a geometry-first app.
-        configuration.isOverCaptureEnabled = true
+        configuration.isOverCaptureEnabled = false
 
         session.start(imagesDirectory: workspace.imagesURL, configuration: configuration)
 
@@ -136,7 +136,11 @@ final class ObjectCaptureEngine: ScanEngine {
 
         let output: PhotogrammetryReconstructor.Output
         do {
-            output = try await reconstructor.reconstruct(workspace: workspace, detail: detail) { [weak self] progress in
+            output = try await reconstructor.reconstruct(
+                workspace: workspace,
+                detail: detail,
+                maximumInputImages: 24
+            ) { [weak self] progress in
                 self?.phase = .reconstructing(progress)
             }
         } catch {
