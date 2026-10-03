@@ -53,9 +53,9 @@ enum GaussianReconstructor {
             // use a tighter cache on 8 GB-class phones and reload frames as needed.
             setenv("MSPLAT_IMAGE_CACHE_MB", String(quality.imageCacheMB), 1)
 
-            // Keep the captured 4K source intact. msplat progressively trains
-            // coarse-to-fine, then spends most of the 30K budget at native
-            // resolution.
+            // Keep the captured high-resolution source intact. The quality
+            // profile controls only progressive training resolution; the saved
+            // camera frames themselves are never replaced by low-res copies.
             let dataset = GaussianDataset(
                 path: datasetPath,
                 downscaleFactor: quality.datasetDownscaleFactor
