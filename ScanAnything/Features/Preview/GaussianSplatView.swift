@@ -226,8 +226,8 @@ fileprivate final class ScanAnythingSplatRenderer: NSObject, MTKViewDelegate {
             return (.zero, 1, 2.2)
         }
 
-        var minimum = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
-        var maximum = SIMD3<Float>(repeating: -.greatestFiniteMagnitude)
+        var minimum = SIMD3<Float>(repeating: Float.greatestFiniteMagnitude)
+        var maximum = SIMD3<Float>(repeating: -Float.greatestFiniteMagnitude)
         var found = false
 
         // Sample very large scenes to keep preview setup cheap while still
