@@ -459,7 +459,7 @@ actor OnDeviceTripoSREngine {
     }
 
     private func exportUSDZ(mesh: DenseMarchingCubes.Mesh) throws -> Data {
-        var vertices = mesh.positions.map {
+        let vertices = mesh.positions.map {
             // TripoSR uses Z-up. SceneKit/USD is Y-up. Rotate the generated
             // object into an upright, front-facing frame before export.
             SCNVector3(-$0.y, $0.z, -$0.x)
@@ -505,7 +505,7 @@ actor OnDeviceTripoSREngine {
             dataStride: MemoryLayout<Float>.size * 4
         )
 
-        var indices = (0..<vertices.count).map(UInt32.init)
+        let indices = (0..<vertices.count).map(UInt32.init)
         let indexData = indices.withUnsafeBytes { Data($0) }
         let element = SCNGeometryElement(
             data: indexData,
