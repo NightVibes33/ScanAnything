@@ -736,7 +736,23 @@ final class CameraOnlyFrameRecorder: NSObject, ARSessionDelegate, @unchecked Sen
         if quality.elevationBandCount <= 1 {
             band = 0
         } else {
-            band = forward.y >= 0 ? 1 : 0
+            // Quantize the camera's vertical look direction across every
+            // configured elevation band. The previous binary up/down split made
+            // a 3-band room profile impossible to measure correctly.
+            let normalizedElevation = min(
+                0.999_999 as Float,
+                max(0, (forward.y + 1) * 0.5)
+            )
+            band = min(
+                quality.elevationBandCount - 1,
+                max(
+                    0,
+                    Int(
+                        normalizedElevation *
+                        Float(quality.elevationBandCount)
+                    )
+                )
+            )
         }
 
         return band * quality.azimuthSectorCount + sector
