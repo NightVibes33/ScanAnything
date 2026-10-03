@@ -16,7 +16,7 @@ struct OnePhotoCaptureView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DexHeader(title: "Capture", subtitle: "one photo")
+            DexHeader(title: "Capture", subtitle: "one photo • on device")
 
             ScrollView {
                 VStack(spacing: 18) {
@@ -28,10 +28,13 @@ struct OnePhotoCaptureView: View {
                         actionButtons
                     }
 
-                    Text("ONE PHOTO • ONE 3D ENTRY")
-                        .font(.system(.caption, design: .monospaced, weight: .black))
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 2)
+                    Label(
+                        "NO UPLOAD • CORE ML • ON-DEVICE 3D",
+                        systemImage: "iphone.gen3.radiowaves.left.and.right"
+                    )
+                    .font(.system(.caption, design: .monospaced, weight: .black))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 2)
                 }
                 .padding(16)
             }
@@ -90,7 +93,7 @@ struct OnePhotoCaptureView: View {
                         .font(.system(size: 92, weight: .ultraLight))
                     Text("CENTER ONE SUBJECT")
                         .font(.system(.headline, design: .monospaced, weight: .black))
-                    Text("Fill most of the frame")
+                    Text("One clear photo. Fill most of the frame.")
                         .font(.system(.caption, design: .monospaced))
                 }
                 .foregroundStyle(.black.opacity(0.76))
@@ -98,7 +101,7 @@ struct OnePhotoCaptureView: View {
 
             if isGenerating {
                 ZStack {
-                    Color.black.opacity(0.72)
+                    Color.black.opacity(0.76)
                     VStack(spacing: 14) {
                         ProgressView()
                             .controlSize(.large)
@@ -106,6 +109,9 @@ struct OnePhotoCaptureView: View {
                         Text(phase)
                             .font(.system(.headline, design: .monospaced, weight: .black))
                             .foregroundStyle(.white)
+                        Text("RUNNING ON THIS IPHONE")
+                            .font(.system(.caption2, design: .monospaced, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.65))
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -145,7 +151,7 @@ struct OnePhotoCaptureView: View {
             Button {
                 generate()
             } label: {
-                Label("CREATE 3D", systemImage: "cube.transparent.fill")
+                Label("REGISTER IN 3D", systemImage: "cube.transparent.fill")
                     .frame(maxWidth: .infinity)
                     .frame(height: 58)
             }
@@ -169,38 +175,27 @@ struct OnePhotoCaptureView: View {
 
         Task {
             isGenerating = true
-            phase = "PREPARING PHOTO"
+            phase = "PREPARING SUBJECT"
+            var entryID: UUID?
 
             do {
                 let jpeg = try CaptureImageProcessor.jpegData(from: image)
                 let entry = try store.createEntry(from: jpeg)
-                phase = "BUILDING 3D"
+                entryID = entry.id
 
-                let service = try Generative3DService()
-                let result = try await service.generate(jpegData: jpeg)
+                phase = "GENERATING 3D"
+                let result = try await OnDeviceTripoSREngine.shared.generate(
+                    jpegData: jpeg
+                )
 
-                phase = "DOWNLOADING MODEL"
-                let thumbnailData: Data?
-                if let thumbnailURL = result.thumbnailURL {
-                    thumbnailData = try await service.download(thumbnailURL)
-                } else {
-                    thumbnailData = nil
-                }
-
-                let glbData = try await service.download(result.glbURL)
-
-                let usdzData: Data?
-                if let usdzURL = result.usdzURL {
-                    usdzData = try await service.download(usdzURL)
-                } else {
-                    usdzData = nil
-                }
-
-                try store.complete(
+                phase = "REGISTERING"
+                try store.completeOnDevice(
                     entry.id,
-                    previewData: thumbnailData,
-                    glbData: glbData,
-                    usdzData: usdzData
+                    previewData: result.previewPNG,
+                    usdzData: result.usdz,
+                    vertexCount: result.vertexCount,
+                    triangleCount: result.triangleCount,
+                    resolution: result.resolution
                 )
 
                 phase = "REGISTERED"
@@ -209,6 +204,9 @@ struct OnePhotoCaptureView: View {
                 self.image = nil
                 photoItem = nil
             } catch {
+                if let entryID {
+                    store.fail(entryID, message: error.localizedDescription)
+                }
                 errorMessage = error.localizedDescription
             }
 

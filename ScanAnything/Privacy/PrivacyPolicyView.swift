@@ -4,19 +4,19 @@ struct PrivacyPolicyView: View {
     var body: some View {
         List {
             Section("Camera and photos") {
-                Text("A photo you choose or capture is used to create the 3D entry you request.")
+                Text("ScanAnything only receives the photo you explicitly capture or select for a Dex entry.")
             }
 
-            Section("3D generation") {
-                Text("When you create a 3D entry, the selected photo is sent to the configured ScanAnything generation service and its model provider for processing. The app does not upload other photos from your library.")
+            Section("On-device generation") {
+                Text("Foreground isolation, neural 3D inference, mesh extraction, preview generation, and USDZ export run on the device. The selected image is not uploaded to a 3D generation server.")
             }
 
             Section("Local library") {
-                Text("Source photos, generated previews, and downloaded 3D model files are stored in the app's local Documents container until you delete the entry or the app.")
+                Text("Source photos, generated previews, and 3D models are stored in the app's local Documents container until you delete the entry or the app.")
             }
 
             Section("Export") {
-                Text("Files leave the app only when you request generation or explicitly export/share a model.")
+                Text("A model leaves the app only when you explicitly use an iOS share or export action.")
             }
         }
         .navigationTitle("Privacy")

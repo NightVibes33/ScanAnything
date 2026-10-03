@@ -1,6 +1,6 @@
 import QuickLook
+import SceneKit
 import SwiftUI
-import WebKit
 
 private struct QuickLookTarget: Identifiable {
     let url: URL
@@ -59,9 +59,20 @@ struct DexDetailView: View {
                             Text(entry.name.uppercased())
                                 .font(.system(.title, design: .monospaced, weight: .black))
 
-                            Text("Generated from a single source photo.")
+                            Text("Generated entirely on this device from one photo.")
                                 .font(.system(.subheadline, design: .monospaced))
                                 .foregroundStyle(.secondary)
+
+                            if let triangles = entry.triangleCount,
+                               let resolution = entry.generationResolution {
+                                HStack {
+                                    Text("\(triangles.formatted()) TRIANGLES")
+                                    Spacer()
+                                    Text("\(resolution)³ FIELD")
+                                }
+                                .font(.system(.caption2, design: .monospaced, weight: .bold))
+                                .foregroundStyle(.secondary)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -110,8 +121,8 @@ struct DexDetailView: View {
                 endPoint: .bottomTrailing
             )
 
-            if let glb = store.glbURL(for: entry), entry.status == .ready {
-                LocalGLBView(url: glb)
+            if let usdz = store.usdzURL(for: entry), entry.status == .ready {
+                LocalUSDZSceneView(url: usdz)
                     .frame(height: 410)
             } else if let image = store.image(for: entry) {
                 Image(uiImage: image)
@@ -125,9 +136,9 @@ struct DexDetailView: View {
 
     @ViewBuilder
     private func modelActions(_ entry: DexEntry) -> some View {
-        DexPanel {
-            VStack(spacing: 12) {
-                if let usdz = store.usdzURL(for: entry) {
+        if let usdz = store.usdzURL(for: entry) {
+            DexPanel {
+                VStack(spacing: 12) {
                     Button {
                         quickLookTarget = QuickLookTarget(url: usdz)
                     } label: {
@@ -144,16 +155,8 @@ struct DexDetailView: View {
                     }
                     .buttonStyle(.bordered)
                 }
-
-                if let glb = store.glbURL(for: entry) {
-                    ShareLink(item: glb) {
-                        Label("EXPORT GLB", systemImage: "cube")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                }
+                .font(.system(.headline, design: .monospaced, weight: .black))
             }
-            .font(.system(.headline, design: .monospaced, weight: .black))
         }
     }
 }
@@ -199,48 +202,22 @@ private struct QuickLookModelView: UIViewControllerRepresentable {
     }
 }
 
-private struct LocalGLBView: UIViewRepresentable {
+private struct LocalUSDZSceneView: UIViewRepresentable {
     let url: URL
 
-    func makeUIView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
-
-        let webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.isOpaque = false
-        webView.backgroundColor = .clear
-        webView.scrollView.isScrollEnabled = false
-        load(url, in: webView)
-        return webView
+    func makeUIView(context: Context) -> SCNView {
+        let view = SCNView()
+        view.backgroundColor = .clear
+        view.allowsCameraControl = true
+        view.autoenablesDefaultLighting = true
+        view.antialiasingMode = .multisampling4X
+        view.scene = try? SCNScene(url: url, options: nil)
+        return view
     }
 
-    func updateUIView(_ webView: WKWebView, context: Context) {}
-
-    private func load(_ modelURL: URL, in webView: WKWebView) {
-        let directory = modelURL.deletingLastPathComponent()
-        let htmlURL = directory.appending(path: "viewer.html")
-        let html = """
-        <!doctype html>
-        <html>
-        <head>
-          <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-          <style>
-            html,body { margin:0; width:100%; height:100%; background:transparent; overflow:hidden; }
-            model-viewer { width:100%; height:100%; background:transparent; }
-          </style>
-          <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/model-viewer.min.js"></script>
-        </head>
-        <body>
-          <model-viewer src="\(modelURL.lastPathComponent)" camera-controls auto-rotate shadow-intensity="1" interaction-prompt="none"></model-viewer>
-        </body>
-        </html>
-        """
-
-        do {
-            try html.write(to: htmlURL, atomically: true, encoding: .utf8)
-            webView.loadFileURL(htmlURL, allowingReadAccessTo: directory)
-        } catch {
-            webView.loadHTMLString("<html><body style='background:black'></body></html>", baseURL: nil)
+    func updateUIView(_ view: SCNView, context: Context) {
+        if view.scene == nil {
+            view.scene = try? SCNScene(url: url, options: nil)
         }
     }
 }

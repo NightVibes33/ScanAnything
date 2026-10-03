@@ -1,82 +1,78 @@
 # ScanAnything
 
-ScanAnything is now a **one-photo 3D Dex**.
+ScanAnything is a **one-photo, fully on-device 3D Dex for iPhone**.
 
-The old multi-photo scanner, photogrammetry modes, Gaussian splats, room scanner,
-LiDAR modes, and editor-style workflow are gone from the product.
+The previous multi-photo scanner, photogrammetry modes, Gaussian splats, room
+scanner, LiDAR workflow, PC backend, and hosted inference API are not part of
+the product anymore.
 
-## What the app does
+## Product flow
 
 1. Open **Capture**.
 2. Take one photo or choose one photo.
-3. ScanAnything removes the background and sends that one selected image to your
-   own 3D engine.
-4. A complete 3D object is generated.
-5. The result is registered as a numbered Dex entry such as `#0001`.
-6. Browse the collection grid, search it, open a specimen, rotate the model,
-   rename it, and export the GLB.
+3. Apple Vision isolates the subject locally.
+4. TripoSR runs through Core ML on the iPhone.
+5. The neural field is queried locally and converted to a mesh with marching
+   cubes.
+6. SceneKit exports the finished mesh to USDZ locally.
+7. The result is registered as a numbered Dex entry such as `#0001`.
 
-The UI is deliberately a collection/Dex interface rather than an AI editor:
-red hardware-inspired shell, numbered entries, specimen cards, capture screen,
-detail records, and search.
+No photo is sent to a generation server.
 
-## Open-source Pokédex UI base
+## On-device model
 
-The collection/grid/detail direction is based on the MIT-licensed
-`brillcp/PocketDex` SwiftUI project by Viktor Gidlöf. ScanAnything does **not**
-bundle Pokémon artwork, names, sprites, PokeAPI data, logos, or other franchise
-assets. The Pokédex-style interaction model is reused for the user's own scanned
-real-world objects.
+The app bundles the MIT-licensed Core ML conversion of TripoSR from
+`mickeyvanolst/triposr-coreml`.
 
-## Free 3D generation for the developer build
+The conversion contains:
 
-There is **no paid model API** in this branch.
+- `ImageToTriplane.mlpackage` — fp16 Core ML MLProgram, about 839 MB
+- `NeRFQuery.mlpackage` — Core ML neural-field query model
+- 512×512 RGB input
+- triplane output `[1,3,40,64,64]`
+- fixed query chunks of 262,144 xyz samples
 
-The included server uses the official open-source
-`VAST-AI-Research/TripoSR` model locally. TripoSR is MIT licensed, accepts one
-image, automatically removes the background, and the upstream project documents
-about 6 GB VRAM for one image.
+The encoder is allowed to use the Apple Neural Engine/GPU/CPU. The published
+conversion identifies CPU as the fastest execution target for the tiny NeRF
+query model, so ScanAnything keeps that stage on CPU while the encoder uses all
+available Core ML compute units.
 
-The server keeps the model resident on the GPU and runs jobs one at a time.
+## Device quality
 
-### Windows setup
+Mesh-field resolution is selected from physical memory:
 
-From the repository root:
+- 8 GB-class and newer devices: 256³
+- 6 GB-class devices: 224³
+- lower-memory supported devices: 192³
 
-```powershell
-powershell -ExecutionPolicy Bypass -File server\setup-windows.ps1
-powershell -ExecutionPolicy Bypass -File server\start-windows.ps1
-```
+The target product range is modern iPhones, including iPhone 14-class hardware
+and newer. The app remains one-photo-first on every supported device.
 
-Then open:
+## Model bootstrap
 
-```
-http://127.0.0.1:8787/health
-```
-
-In ScanAnything Settings set **Your 3D Engine** to:
-
-```
-http://<PC-LAN-OR-TAILSCALE-IP>:8787/generate
-```
-
-No FAL key, Replicate key, paid inference subscription, or per-generation fee
-is required.
-
-## Quality defaults
-
-The local server currently uses:
-
-- automatic foreground/background isolation
-- TripoSR single-image reconstruction
-- CUDA when an NVIDIA GPU is available
-- 384 marching-cubes resolution
-- automatic 320/256 fallback if the GPU runs out of memory
-- GLB output stored locally in the app's Dex library
-
-## iOS build
+The ~839 MB model is not committed to Git. Build machines fetch the pinned Core
+ML model before compiling:
 
 ```bash
+bash scripts/bootstrap-triposr-coreml.sh
+```
+
+The GitHub Actions workflow caches the model between builds and Xcode compiles
+the model packages into the IPA. The shipped app therefore has no inference
+server dependency.
+
+## Dex UI
+
+The collection/grid/detail direction is based on the MIT-licensed
+`brillcp/PocketDex` SwiftUI project by Viktor Gidlöf. ScanAnything uses the Dex
+interaction model for the user's own real-world 3D entries and does not bundle
+Pokémon artwork, sprites, names, PokeAPI data, or franchise logos.
+
+## Build
+
+```bash
+bash scripts/bootstrap-triposr-coreml.sh
+
 xcodebuild \
   -project ScanAnything.xcodeproj \
   -scheme ScanAnything \
@@ -85,4 +81,4 @@ xcodebuild \
   build
 ```
 
-GitHub Actions builds and packages an unsigned IPA automatically.
+GitHub Actions builds and packages the self-contained unsigned IPA.

@@ -19,10 +19,31 @@ Copyright (c) 2024 Tripo AI & Stability AI
 
 License: MIT
 
-The optional developer-hosted 3D server downloads and runs TripoSR locally. The
-model and server runtime are not bundled into the iOS IPA.
+TripoSR provides the single-image 3D reconstruction architecture and original
+model weights.
 
-### MIT License
+## TripoSR Core ML conversion
+
+Model: `mickeyvanolst/triposr-coreml`
+
+License: MIT
+
+ScanAnything bundles the fp16 Core ML MLProgram conversion of TripoSR so the
+neural reconstruction runs on Apple hardware without a generation server.
+
+## swift-tsdf marching-cubes tables
+
+Project: `stevyf93II/swift-tsdf`
+
+Copyright (c) 2026 Steve Flowers
+
+License: MIT
+
+ScanAnything adapts the project's Swift marching-cubes lookup-table layout for
+on-device extraction of the TripoSR density field. The canonical
+Lorensen-Cline lookup-table values themselves are public-domain values.
+
+## MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in

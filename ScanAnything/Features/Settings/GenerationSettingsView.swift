@@ -1,28 +1,37 @@
 import SwiftUI
 
 struct GenerationSettingsView: View {
-    @AppStorage("generationEndpoint") private var generationEndpoint = ""
     @Environment(\.dismiss) private var dismiss
+
+    private var memoryGB: Double {
+        Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
+    }
 
     var body: some View {
         Form {
-            Section("Your 3D Engine") {
-                TextField(
-                    "http://YOUR-PC:8787/generate",
-                    text: $generationEndpoint,
-                    axis: .vertical
+            Section("On-device 3D engine") {
+                LabeledContent("Model", value: "TripoSR Core ML")
+                LabeledContent("Inference", value: "This iPhone")
+                LabeledContent("Network", value: "Not used")
+                LabeledContent(
+                    "Mesh grid",
+                    value: "\(OnDeviceTripoSREngine.recommendedResolution)³"
                 )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
-
-                Text("This build uses your own free TripoSR server. No paid generation API or provider key is required.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                LabeledContent(
+                    "Device memory",
+                    value: String(format: "%.1f GB", memoryGB)
+                )
             }
 
-            Section("PC setup") {
-                Text("Run server/setup-windows.ps1 once, then server/start-windows.ps1. Use your PC LAN or Tailscale address above.")
+            Section("Pipeline") {
+                Label("Vision foreground isolation", systemImage: "person.crop.rectangle")
+                Label("Core ML triplane encoder", systemImage: "brain.head.profile")
+                Label("Local NeRF field queries", systemImage: "cube.transparent")
+                Label("Local marching cubes + USDZ", systemImage: "shippingbox.fill")
+            }
+
+            Section {
+                Text("A selected photo never needs to leave the device for 3D generation. The neural-network weights ship with the app build.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -33,7 +42,7 @@ struct GenerationSettingsView: View {
                 }
             }
         }
-        .navigationTitle("Settings")
+        .navigationTitle("System")
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { dismiss() }

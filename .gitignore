@@ -18,8 +18,7 @@ xcuserdata/
 .build/
 .swiftpm/
 
-## Local reconstruction output — these are scan artefacts, not source.
-## A single room USDZ runs to tens of megabytes.
+## Generated 3D assets
 *.usdz
 *.usdc
 *.usda
@@ -27,13 +26,5 @@ xcuserdata/
 *.obj
 *.stl
 
-# Rebuilt from pinned source by scripts/bootstrap-msplat.sh
-Vendor/msplat/
-
-
-# Local free 3D engine
-server/.venv/
-server/vendor/
-server/outputs/
-__pycache__/
-*.pyc
+## Large Core ML weights are fetched by scripts/bootstrap-triposr-coreml.sh
+ScanAnything/Models/TripoSRCoreML/

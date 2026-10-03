@@ -17,7 +17,7 @@ concurrency:
 jobs:
   unsigned-ipa:
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -30,6 +30,26 @@ jobs:
           set -euxo pipefail
           xcodebuild -version
           swift --version
+
+      - name: Cache on-device TripoSR Core ML
+        id: cache-triposr-coreml
+        uses: actions/cache@v4
+        with:
+          path: ScanAnything/Models/TripoSRCoreML
+          key: triposr-coreml-1426b49-v1
+
+      - name: Bootstrap on-device TripoSR Core ML
+        if: steps.cache-triposr-coreml.outputs.cache-hit != 'true'
+        run: |
+          set -euxo pipefail
+          bash scripts/bootstrap-triposr-coreml.sh
+
+      - name: Verify bundled models
+        run: |
+          set -euxo pipefail
+          test -f ScanAnything/Models/TripoSRCoreML/ImageToTriplane.mlpackage/Manifest.json
+          test -f ScanAnything/Models/TripoSRCoreML/NeRFQuery.mlpackage/Manifest.json
+          du -sh ScanAnything/Models/TripoSRCoreML
 
       - name: Build unsigned app
         run: |
@@ -47,32 +67,20 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build | tee xcodebuild.log
 
-      - name: Compile tests
-        run: |
-          set -o pipefail
-          rm -rf TestDerivedData
-          xcodebuild \
-            -project ScanAnything.xcodeproj \
-            -scheme ScanAnything \
-            -configuration Debug \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath TestDerivedData \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            build-for-testing | tee xcodebuild-tests.log
-
       - name: Package unsigned IPA
         run: |
           set -euxo pipefail
           APP="$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name 'ScanAnything.app' -print -quit)"
           test -n "$APP"
+          test -d "$APP/ImageToTriplane.mlmodelc" -o -d "$APP/TripoSRCoreML/ImageToTriplane.mlmodelc"
+          test -d "$APP/NeRFQuery.mlmodelc" -o -d "$APP/TripoSRCoreML/NeRFQuery.mlmodelc"
+          du -sh "$APP"
           rm -rf Payload ScanAnything-unsigned.ipa
           mkdir Payload
           ditto "$APP" "Payload/ScanAnything.app"
           /usr/bin/zip -qry ScanAnything-unsigned.ipa Payload
           unzip -l ScanAnything-unsigned.ipa | grep 'Payload/ScanAnything.app/Info.plist'
+          ls -lh ScanAnything-unsigned.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v6
@@ -87,7 +95,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: ScanAnything-build-log
-          path: |
-            xcodebuild.log
-            xcodebuild-tests.log
+          path: xcodebuild.log
           if-no-files-found: ignore

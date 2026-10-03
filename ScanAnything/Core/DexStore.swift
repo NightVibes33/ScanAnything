@@ -35,11 +35,6 @@ final class DexStore {
         directory(for: entry).appending(path: entry.previewImageFileName)
     }
 
-    func glbURL(for entry: DexEntry) -> URL? {
-        guard let name = entry.glbFileName else { return nil }
-        return directory(for: entry).appending(path: name)
-    }
-
     func usdzURL(for entry: DexEntry) -> URL? {
         guard let name = entry.usdzFileName else { return nil }
         return directory(for: entry).appending(path: name)
@@ -47,7 +42,11 @@ final class DexStore {
 
     func createEntry(from jpegData: Data) throws -> DexEntry {
         let nextNumber = (entries.map(\.number).max() ?? 0) + 1
-        let entry = DexEntry(number: nextNumber, name: "Specimen (nextNumber)")
+        let entry = DexEntry(
+            number: nextNumber,
+            name: "Specimen \(nextNumber)",
+            statusMessage: "Preparing on-device reconstruction"
+        )
         let folder = directory(for: entry)
         try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
         try jpegData.write(to: sourceImageURL(for: entry), options: .atomic)
@@ -57,49 +56,37 @@ final class DexStore {
         return entry
     }
 
-    func markSubmitted(_ id: UUID, generationID: String) {
-        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
-        entries[index].generationID = generationID
-        entries[index].status = .generating
-        entries[index].statusMessage = "Building 3D model"
-        persist()
-    }
-
-    func complete(
+    func completeOnDevice(
         _ id: UUID,
-        previewData: Data?,
-        glbData: Data,
-        usdzData: Data?
+        previewData: Data,
+        usdzData: Data,
+        vertexCount: Int,
+        triangleCount: Int,
+        resolution: Int
     ) throws {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         let entry = entries[index]
         let folder = directory(for: entry)
 
-        if let previewData {
-            let previewName = "preview.png"
-            try previewData.write(
-                to: folder.appending(path: previewName),
-                options: .atomic
-            )
-            entries[index].previewImageFileName = previewName
-        }
-
-        let glbName = "model.glb"
-        try glbData.write(
-            to: folder.appending(path: glbName),
+        let previewName = "preview.png"
+        try previewData.write(
+            to: folder.appending(path: previewName),
             options: .atomic
         )
-        entries[index].glbFileName = glbName
 
-        if let usdzData {
-            let usdzName = "model.usdz"
-            try usdzData.write(
-                to: folder.appending(path: usdzName),
-                options: .atomic
-            )
-            entries[index].usdzFileName = usdzName
-        }
+        let usdzName = "model.usdz"
+        try usdzData.write(
+            to: folder.appending(path: usdzName),
+            options: .atomic
+        )
 
+        entries[index].previewImageFileName = previewName
+        entries[index].usdzFileName = usdzName
+        entries[index].glbFileName = nil
+        entries[index].generationID = nil
+        entries[index].vertexCount = vertexCount
+        entries[index].triangleCount = triangleCount
+        entries[index].generationResolution = resolution
         entries[index].status = .ready
         entries[index].statusMessage = nil
         persist()

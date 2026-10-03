@@ -18,6 +18,9 @@ struct DexEntry: Identifiable, Codable, Hashable, Sendable {
     var generationID: String?
     var status: DexEntryStatus
     var statusMessage: String?
+    var vertexCount: Int?
+    var triangleCount: Int?
+    var generationResolution: Int?
 
     init(
         id: UUID = UUID(),
@@ -30,7 +33,10 @@ struct DexEntry: Identifiable, Codable, Hashable, Sendable {
         usdzFileName: String? = nil,
         generationID: String? = nil,
         status: DexEntryStatus = .generating,
-        statusMessage: String? = nil
+        statusMessage: String? = nil,
+        vertexCount: Int? = nil,
+        triangleCount: Int? = nil,
+        generationResolution: Int? = nil
     ) {
         self.id = id
         self.number = number
@@ -43,6 +49,9 @@ struct DexEntry: Identifiable, Codable, Hashable, Sendable {
         self.generationID = generationID
         self.status = status
         self.statusMessage = statusMessage
+        self.vertexCount = vertexCount
+        self.triangleCount = triangleCount
+        self.generationResolution = generationResolution
     }
 
     var dexNumber: String {
