@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: scananything-${{ github.ref }}
@@ -97,6 +97,20 @@ jobs:
           path: ScanAnything-unsigned.ipa
           if-no-files-found: error
           compression-level: 0
+
+      - name: Publish direct-download IPA release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          gh release delete on-device-latest --cleanup-tag --yes || true
+          gh release create on-device-latest \
+            ScanAnything-unsigned.ipa \
+            --target "$GITHUB_SHA" \
+            --title "ScanAnything On-Device Latest" \
+            --notes "Fully on-device one-photo 3D build. No inference server required." \
+            --prerelease
 
       - name: Split IPA for direct retrieval
         run: |
