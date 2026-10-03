@@ -109,6 +109,7 @@ struct ScanAnythingCoreTests {
     }
 
     @Test("Universal capture keeps objects short while room scans collect broader coverage")
+    @MainActor
     func universalCapturePurposeThresholds() {
         #expect(CameraOnlyCapturePurpose.object.minimumFrameCount == 8)
         #expect(CameraOnlyCapturePurpose.object.maximumFrameCount == 20)
