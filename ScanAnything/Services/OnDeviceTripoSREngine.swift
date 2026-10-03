@@ -67,13 +67,13 @@ actor OnDeviceTripoSREngine {
         let encoderInput = try MLDictionaryFeatureProvider(
             dictionary: ["image": MLFeatureValue(multiArray: imageArray)]
         )
-        let encoderOutput = try await models.encoder.prediction(from: encoderInput)
+        let encoderOutput = try models.encoder.prediction(from: encoderInput)
         guard let triplane = encoderOutput.featureValue(for: "triplane")?.multiArrayValue else {
             throw OnDevice3DError.invalidModelOutput("triplane")
         }
 
         let resolution = Self.recommendedResolution
-        let field = try await queryField(
+        let field = try queryField(
             decoder: models.decoder,
             triplane: triplane,
             resolution: resolution
@@ -372,7 +372,7 @@ actor OnDeviceTripoSREngine {
         decoder: MLModel,
         triplane: MLMultiArray,
         resolution: Int
-    ) async throws -> Field {
+    ) throws -> Field {
         let total = resolution * resolution * resolution
         var densities = [Float](repeating: 0, count: total)
         var colors = [SIMD3<Float>](repeating: .zero, count: total)
@@ -414,7 +414,7 @@ actor OnDeviceTripoSREngine {
                     "xyz": MLFeatureValue(multiArray: xyz),
                 ]
             )
-            let output = try await decoder.prediction(from: input)
+            let output = try decoder.prediction(from: input)
 
             guard let density = output.featureValue(for: "density")?.multiArrayValue else {
                 throw OnDevice3DError.invalidModelOutput("density")
