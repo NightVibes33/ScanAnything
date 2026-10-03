@@ -58,12 +58,12 @@ struct ScanAnythingCoreTests {
     func highDetailCameraQualityProfile() {
         let quality = CameraOnlyQualityProfile.highDetail
 
-        #expect(quality.datasetDownscaleFactor == 1.0)
+        #expect(quality.datasetDownscaleFactor == 0.5)
         #expect(quality.targetFrameCount == 16)
         #expect(quality.minimumFrameCount == 8)
         #expect(quality.maximumFrameCount >= quality.targetFrameCount)
         #expect(quality.minimumFeaturePoints >= 500)
-        #expect(quality.maximumFeaturePoints >= 100_000)
+        #expect(quality.maximumFeaturePoints <= 60_000)
         #expect(
             quality.maximumFeaturePoints + quality.depthPriorMaximumPoints <=
             250_000
@@ -74,12 +74,12 @@ struct ScanAnythingCoreTests {
         #expect(quality.minimumViewCoverage >= 0.20)
         #expect(quality.minimumViewCoverage <= 0.30)
 
-        #expect(quality.trainingIterations == 5_000)
+        #expect(quality.trainingIterations == 3_000)
         #expect(quality.shDegree == 3)
         #expect(quality.ssimWeight == 0.20)
-        #expect(quality.numDownscales == 2)
-        #expect(quality.stopDensifyAt >= 1_500)
-        #expect(quality.stopDensifyAt <= 2_500)
+        #expect(quality.numDownscales == 1)
+        #expect(quality.stopDensifyAt >= 800)
+        #expect(quality.stopDensifyAt <= 1_000)
         #expect(
             quality.resolutionSchedule * quality.numDownscales <
             quality.stopDensifyAt
@@ -88,9 +88,9 @@ struct ScanAnythingCoreTests {
 
         // Real-time native-resolution runs still bound transient pressure and
         // synchronize often enough for ETA/progress to track completed GPU work.
-        #expect(quality.imageCacheMB <= 256)
+        #expect(quality.imageCacheMB <= 96)
         #expect(quality.gpuSyncInterval <= 100)
-        #expect(quality.memorySafetyHeadroomMB >= 256)
+        #expect(quality.memorySafetyHeadroomMB >= 700)
         #expect(
             quality.minimumEmergencyFinalizeIteration >
             quality.stopDensifyAt
@@ -99,13 +99,16 @@ struct ScanAnythingCoreTests {
             quality.minimumEmergencyFinalizeIteration <
             quality.trainingIterations
         )
-        #expect(quality.criticalThermalPauseMilliseconds >= 200)
+        #expect(quality.maximumProcessingSeconds <= 60)
+        #expect(quality.maximumTrainingSeconds <= 40)
+        #expect(quality.minimumUsefulTrainingIterations <= 250)
+        #expect(quality.maximumSafeSplatCount <= 350_000)
 
         #expect(quality.learnedDepthPriorEnabled)
-        #expect(quality.depthPriorKeyframeCount <= 10)
+        #expect(quality.depthPriorKeyframeCount <= 6)
         #expect(quality.depthPriorMinimumAnchors >= 24)
-        #expect(quality.depthPriorMaximumPoints <= 70_000)
-        #expect(quality.depthPriorVoxelSize <= 0.004)
+        #expect(quality.depthPriorMaximumPoints <= 40_000)
+        #expect(quality.depthPriorVoxelSize <= 0.005)
     }
 
     @Test("Universal capture keeps objects short while room scans collect broader coverage")

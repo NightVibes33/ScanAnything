@@ -34,6 +34,7 @@ enum GaussianReconstructor {
         outputURL: URL,
         quality: CameraOnlyQualityProfile = .highDetail,
         backgroundIsolated: Bool = false,
+        maximumTrainingSeconds: TimeInterval? = nil,
         progress: @escaping @MainActor @Sendable (
             _ fraction: Double,
             _ splats: Int,
@@ -88,11 +89,17 @@ enum GaussianReconstructor {
             let syncEvery = max(1, quality.gpuSyncInterval)
             var splatCount = trainer.splatCount
             var emergencyFinalized = false
-            var lastSyncTime = ProcessInfo.processInfo.systemUptime
+            let trainingStartedAt = ProcessInfo.processInfo.systemUptime
+            let trainingDeadline = max(
+                5,
+                maximumTrainingSeconds ?? quality.maximumTrainingSeconds
+            )
+            var lastSyncTime = trainingStartedAt
             var lastSyncIteration = 0
             var smoothedSecondsPerStep: Double?
+            var reportedRemaining: TimeInterval = trainingDeadline
 
-            await progress(0, splatCount, nil)
+            await progress(0, splatCount, reportedRemaining)
 
             for index in 0..<total {
                 if index % syncEvery == 0 {
@@ -121,10 +128,10 @@ enum GaussianReconstructor {
                 try Task.checkCancellation()
 
                 let now = ProcessInfo.processInfo.systemUptime
+                let syncElapsed = max(0.000_001, now - lastSyncTime)
                 let completedSinceSync = max(1, completed - lastSyncIteration)
                 let measuredSecondsPerStep =
-                    max(0.000_001, now - lastSyncTime) /
-                    Double(completedSinceSync)
+                    syncElapsed / Double(completedSinceSync)
                 let trainerSecondsPerStep = max(
                     0.000_001,
                     Double(stats.msPerStep) / 1_000
@@ -135,23 +142,36 @@ enum GaussianReconstructor {
                 )
                 if let previous = smoothedSecondsPerStep {
                     smoothedSecondsPerStep =
-                        previous * 0.72 + sampleSecondsPerStep * 0.28
+                        previous * 0.78 + sampleSecondsPerStep * 0.22
                 } else {
                     smoothedSecondsPerStep = sampleSecondsPerStep
                 }
                 lastSyncTime = now
                 lastSyncIteration = completed
 
-                let trainingFraction = Double(completed) / Double(total)
+                let elapsed = max(0, now - trainingStartedAt)
+                let hardRemaining = max(0, trainingDeadline - elapsed)
+                let iterationFraction = Double(completed) / Double(total)
+                let timeFraction = min(1, elapsed / trainingDeadline)
+                let trainingFraction = max(iterationFraction, timeFraction)
                 let remainingSteps = max(0, total - completed)
-                let estimatedRemaining =
+                let throughputRemaining =
                     smoothedSecondsPerStep.map {
-                        Double(remainingSteps) * $0 + 1.0
-                    }
+                        Double(remainingSteps) * $0 * 1.12
+                    } ?? hardRemaining
+                let candidateRemaining = min(
+                    hardRemaining,
+                    throughputRemaining
+                )
+                reportedRemaining = min(
+                    max(0, reportedRemaining - syncElapsed),
+                    candidateRemaining
+                )
+
                 await progress(
                     trainingFraction * 0.96,
                     splatCount,
-                    estimatedRemaining
+                    reportedRemaining
                 )
 
                 let availableMB = Self.availableMemoryMB()
@@ -165,31 +185,68 @@ enum GaussianReconstructor {
                 // iOS. If the phone is close to being killed after substantial
                 // full-resolution training, preserve the current converged model
                 // instead of risking a permanent late-stage stall/loss.
-                if availableMB > 0,
-                   availableMB <= quality.memorySafetyHeadroomMB,
-                   completed >= quality.minimumEmergencyFinalizeIteration {
+                let reachedUsefulModel =
+                    completed >= quality.minimumUsefulTrainingIterations
+
+                if elapsed >= trainingDeadline, reachedUsefulModel {
                     emergencyFinalized = true
-                    Self.logger.warning(
-                        "Finalizing early for memory safety at step=\(completed), availableMB=\(availableMB)"
+                    Self.logger.info(
+                        "Finalizing at realtime deadline step=\(completed) elapsed=\(elapsed)"
                     )
                     break
                 }
 
-                // Real cooldown, not a token yield. Quality stays unchanged; only
-                // wall time stretches when the A-series SoC reaches sustained
-                // thermal pressure.
+                if elapsed >= trainingDeadline + 3 {
+                    emergencyFinalized = true
+                    Self.logger.warning(
+                        "Forced realtime finalize step=\(completed) elapsed=\(elapsed)"
+                    )
+                    break
+                }
+
+                if availableMB > 0,
+                   availableMB <= quality.memorySafetyHeadroomMB,
+                   reachedUsefulModel {
+                    emergencyFinalized = true
+                    Self.logger.warning(
+                        "Finalizing for memory safety step=\(completed) availableMB=\(availableMB)"
+                    )
+                    break
+                }
+
+                if availableMB > 0,
+                   availableMB <= 320,
+                   completed >= 50 {
+                    emergencyFinalized = true
+                    Self.logger.warning(
+                        "Emergency low-memory finalize step=\(completed) availableMB=\(availableMB)"
+                    )
+                    break
+                }
+
+                if splatCount >= quality.maximumSafeSplatCount,
+                   reachedUsefulModel {
+                    emergencyFinalized = true
+                    Self.logger.warning(
+                        "Finalizing at splat safety cap step=\(completed) splats=\(splatCount)"
+                    )
+                    break
+                }
+
                 switch ProcessInfo.processInfo.thermalState {
-                case .serious:
-                    try await Task.sleep(
-                        for: .milliseconds(quality.seriousThermalPauseMilliseconds)
-                    )
-                case .critical:
-                    try await Task.sleep(
-                        for: .milliseconds(quality.criticalThermalPauseMilliseconds)
-                    )
-                case .nominal, .fair:
+                case .critical where completed >= 50:
+                    emergencyFinalized = true
+                case .serious
+                    where reachedUsefulModel &&
+                          elapsed >= trainingDeadline * 0.70:
+                    emergencyFinalized = true
+                case .nominal, .fair, .serious, .critical:
                     break
                 @unknown default:
+                    break
+                }
+
+                if emergencyFinalized {
                     break
                 }
             }

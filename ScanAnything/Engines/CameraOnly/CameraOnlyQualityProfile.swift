@@ -44,6 +44,10 @@ struct CameraOnlyQualityProfile: Sendable, Equatable {
     let minimumEmergencyFinalizeIteration: Int
     let seriousThermalPauseMilliseconds: Int
     let criticalThermalPauseMilliseconds: Int
+    let maximumProcessingSeconds: TimeInterval
+    let maximumTrainingSeconds: TimeInterval
+    let minimumUsefulTrainingIterations: Int
+    let maximumSafeSplatCount: Int
 
     let learnedDepthPriorEnabled: Bool
     let depthPriorKeyframeCount: Int
@@ -57,7 +61,7 @@ struct CameraOnlyQualityProfile: Sendable, Equatable {
         minimumFrameCount: 8,
         maximumFrameCount: 120,
         minimumFeaturePoints: 500,
-        maximumFeaturePoints: 120_000,
+        maximumFeaturePoints: 60_000,
         minimumCaptureInterval: 0.12,
         minimumTranslation: 0.020,
         minimumRotation: 0.050,
@@ -66,34 +70,38 @@ struct CameraOnlyQualityProfile: Sendable, Equatable {
         azimuthSectorCount: 12,
         elevationBandCount: 2,
         minimumViewCoverage: 0.25,
-        trainingIterations: 5_000,
+        trainingIterations: 3_000,
         shDegree: 3,
         shDegreeInterval: 1_000,
         ssimWeight: 0.20,
-        numDownscales: 2,
-        resolutionSchedule: 700,
-        warmupLength: 200,
+        numDownscales: 1,
+        resolutionSchedule: 500,
+        warmupLength: 120,
         refineEvery: 100,
         resetAlphaEvery: 30,
         densifyGradThresh: 0.00018,
         densifySizeThresh: 0.01,
-        stopScreenSizeAt: 2_500,
+        stopScreenSizeAt: 1_200,
         // Learned depth already gives the model a dense seed, so most topology
         // growth can finish early and the rest of the budget refines appearance.
-        stopDensifyAt: 2_000,
+        stopDensifyAt: 900,
         splitScreenSize: 0.045,
-        datasetDownscaleFactor: 1.0,
-        imageCacheMB: 192,
-        gpuSyncInterval: 25,
-        memorySafetyHeadroomMB: 320,
-        minimumEmergencyFinalizeIteration: 3_500,
-        seriousThermalPauseMilliseconds: 50,
-        criticalThermalPauseMilliseconds: 250,
+        datasetDownscaleFactor: 0.5,
+        imageCacheMB: 96,
+        gpuSyncInterval: 10,
+        memorySafetyHeadroomMB: 700,
+        minimumEmergencyFinalizeIteration: 250,
+        seriousThermalPauseMilliseconds: 0,
+        criticalThermalPauseMilliseconds: 0,
+        maximumProcessingSeconds: 55,
+        maximumTrainingSeconds: 38,
+        minimumUsefulTrainingIterations: 200,
+        maximumSafeSplatCount: 350_000,
         learnedDepthPriorEnabled: true,
-        depthPriorKeyframeCount: 10,
+        depthPriorKeyframeCount: 6,
         depthPriorMinimumAnchors: 24,
-        depthPriorGridStride: 10,
-        depthPriorMaximumPoints: 70_000,
-        depthPriorVoxelSize: 0.004
+        depthPriorGridStride: 12,
+        depthPriorMaximumPoints: 40_000,
+        depthPriorVoxelSize: 0.005
     )
 }

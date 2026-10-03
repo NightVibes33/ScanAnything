@@ -276,9 +276,11 @@ final class CameraOnlyCaptureEngine {
         UIApplication.shared.isIdleTimerDisabled = true
         phase = .reconstructing
         processingStartedAt = ProcessInfo.processInfo.systemUptime
+        processingEstimatedRemaining = quality.maximumProcessingSeconds
         updateProcessing(
             progress: 0.01,
-            message: "Preparing 3D reconstruction"
+            message: "Preparing 3D reconstruction",
+            directRemaining: quality.maximumProcessingSeconds
         )
 
         let snapshot = recorder.snapshot()
@@ -385,11 +387,24 @@ final class CameraOnlyCaptureEngine {
                     message: reconstructionPurpose.processingTitle
                 )
 
+                let preprocessingElapsed = self.processingStartedAt.map {
+                    max(0, ProcessInfo.processInfo.systemUptime - $0)
+                } ?? 0
+                let remainingTotalBudget = max(
+                    5,
+                    quality.maximumProcessingSeconds - preprocessingElapsed
+                )
+                let trainingBudget = min(
+                    quality.maximumTrainingSeconds,
+                    remainingTotalBudget
+                )
+
                 let splats = try await GaussianReconstructor.reconstruct(
                     datasetRoot: workspace.root,
                     outputURL: outputURL,
                     quality: quality,
-                    backgroundIsolated: prepared.backgroundIsolated
+                    backgroundIsolated: prepared.backgroundIsolated,
+                    maximumTrainingSeconds: trainingBudget
                 ) { [weak self] progress, splatCount, estimatedRemaining in
                     guard let self else { return }
                     self.gaussianCount = splatCount
@@ -487,23 +502,25 @@ final class CameraOnlyCaptureEngine {
         processingProgress = clamped
         processingMessage = message
 
-        let candidate: TimeInterval?
-        if let directRemaining, directRemaining.isFinite, directRemaining > 0 {
-            candidate = directRemaining
-        } else if let started = processingStartedAt, clamped >= 0.03 {
-            let elapsed = max(
-                0.001,
-                ProcessInfo.processInfo.systemUptime - started
-            )
-            candidate = elapsed * (1 - clamped) / clamped
+        let elapsed = processingStartedAt.map {
+            max(0, ProcessInfo.processInfo.systemUptime - $0)
+        } ?? 0
+        let budgetRemaining = max(
+            0,
+            quality.maximumProcessingSeconds - elapsed
+        )
+
+        let candidate: TimeInterval
+        if let directRemaining,
+           directRemaining.isFinite,
+           directRemaining >= 0 {
+            candidate = min(budgetRemaining, directRemaining)
         } else {
-            candidate = nil
+            candidate = budgetRemaining
         }
 
-        guard let candidate else { return }
         if let previous = processingEstimatedRemaining {
-            processingEstimatedRemaining =
-                previous * 0.68 + candidate * 0.32
+            processingEstimatedRemaining = min(previous, candidate)
         } else {
             processingEstimatedRemaining = candidate
         }
