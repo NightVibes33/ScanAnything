@@ -35,6 +35,11 @@ snapshot_download(
 )
 PY
 
+# huggingface_hub stores transfer metadata under local_dir/.cache. Because the
+# iOS target uses a file-system-synchronized source group, Xcode would otherwise
+# discover those cached .mlpackage paths as duplicate Core ML resources.
+rm -rf "$DEST/.cache"
+
 test -f "$DEST/ImageToTriplane.mlpackage/Manifest.json"
 test -f "$DEST/NeRFQuery.mlpackage/Manifest.json"
 
