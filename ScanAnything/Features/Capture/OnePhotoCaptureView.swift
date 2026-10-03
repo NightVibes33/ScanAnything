@@ -127,7 +127,7 @@ struct OnePhotoCaptureView: View {
                     .frame(height: 54)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.dexRed)
+            .tint(Color.dexRed)
 
             PhotosPicker(selection: $photoItem, matching: .images) {
                 Label("CHOOSE PHOTO", systemImage: "photo.fill")
@@ -150,7 +150,7 @@ struct OnePhotoCaptureView: View {
                     .frame(height: 58)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.dexRed)
+            .tint(Color.dexRed)
             .disabled(isGenerating)
 
             Button("RETAKE") {

@@ -29,3 +29,11 @@ xcuserdata/
 
 # Rebuilt from pinned source by scripts/bootstrap-msplat.sh
 Vendor/msplat/
+
+
+# Local free 3D engine
+server/.venv/
+server/vendor/
+server/outputs/
+__pycache__/
+*.pyc

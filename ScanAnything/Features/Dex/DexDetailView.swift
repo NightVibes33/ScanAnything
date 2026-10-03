@@ -105,7 +105,7 @@ struct DexDetailView: View {
     private func hero(_ entry: DexEntry) -> some View {
         ZStack {
             LinearGradient(
-                colors: [.dexRed, .dexRedDark, .black],
+                colors: [Color.dexRed, Color.dexRedDark, Color.black],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -136,7 +136,7 @@ struct DexDetailView: View {
                             .frame(height: 48)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.dexRed)
+                    .tint(Color.dexRed)
 
                     ShareLink(item: usdz) {
                         Label("EXPORT USDZ", systemImage: "square.and.arrow.up")
@@ -231,7 +231,7 @@ private struct LocalGLBView: UIViewRepresentable {
           <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/model-viewer.min.js"></script>
         </head>
         <body>
-          <model-viewer src="(modelURL.lastPathComponent)" camera-controls auto-rotate shadow-intensity="1" interaction-prompt="none"></model-viewer>
+          <model-viewer src="\(modelURL.lastPathComponent)" camera-controls auto-rotate shadow-intensity="1" interaction-prompt="none"></model-viewer>
         </body>
         </html>
         """

@@ -65,7 +65,7 @@ struct DexLibraryView: View {
             Spacer()
             Image(systemName: "viewfinder.circle")
                 .font(.system(size: 86, weight: .thin))
-                .foregroundStyle(.dexRed)
+                .foregroundStyle(Color.dexRed)
 
             Text("NO ENTRIES")
                 .font(.system(.title, design: .monospaced, weight: .black))
@@ -80,7 +80,7 @@ struct DexLibraryView: View {
                 selectedTab = .capture
             }
             .buttonStyle(.borderedProminent)
-            .tint(.dexRed)
+            .tint(Color.dexRed)
             .font(.system(.headline, design: .monospaced, weight: .bold))
             Spacer()
         }

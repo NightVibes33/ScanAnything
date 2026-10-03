@@ -1,52 +1,80 @@
 # ScanAnything
 
-ScanAnything is a one-photo 3D collection app.
+ScanAnything is now a **one-photo 3D Dex**.
 
-The old photogrammetry / Gaussian-splat scanner has been removed from the app product. The primary flow is now:
+The old multi-photo scanner, photogrammetry modes, Gaussian splats, room scanner,
+LiDAR modes, and editor-style workflow are gone from the product.
 
-1. Take one photo or choose one photo.
-2. Send only that selected image to the configured generation service.
-3. Generate a textured 3D asset with Hunyuan 3D v3.1 Pro.
-4. Download the GLB (and USDZ when the provider returns it).
-5. Register the finished object as a numbered local Dex entry.
-6. Browse, rotate, search, rename, export, or open the object in AR when USDZ is available.
+## What the app does
 
-## UI
+1. Open **Capture**.
+2. Take one photo or choose one photo.
+3. ScanAnything removes the background and sends that one selected image to your
+   own 3D engine.
+4. A complete 3D object is generated.
+5. The result is registered as a numbered Dex entry such as `#0001`.
+6. Browse the collection grid, search it, open a specimen, rotate the model,
+   rename it, and export the GLB.
 
-The app is a real collection/Dex interface, not a 3D editor. It uses a red hardware-inspired shell, numbered specimen grid, detail records, local search, and a dedicated one-photo capture screen.
+The UI is deliberately a collection/Dex interface rather than an AI editor:
+red hardware-inspired shell, numbered entries, specimen cards, capture screen,
+detail records, and search.
 
-The grid/detail structure is inspired by the open-source PocketDex project by Viktor Gidlöf (MIT). No Pokémon artwork, sprites, names, data, logos, or other franchise assets are bundled.
+## Open-source Pokédex UI base
 
-## 3D backend
+The collection/grid/detail direction is based on the MIT-licensed
+`brillcp/PocketDex` SwiftUI project by Viktor Gidlöf. ScanAnything does **not**
+bundle Pokémon artwork, names, sprites, PokeAPI data, logos, or other franchise
+assets. The Pokédex-style interaction model is reused for the user's own scanned
+real-world objects.
 
-The repository includes a Vercel-compatible API under `api/`.
+## Free 3D generation for the developer build
 
-The API uses:
+There is **no paid model API** in this branch.
 
-- `fal-ai/hunyuan-3d/v3.1/pro/image-to-3d`
-- PBR enabled
-- 1,000,000 target faces
-- queue submission + polling, so the iOS app does not keep a long HTTP request open
+The included server uses the official open-source
+`VAST-AI-Research/TripoSR` model locally. TripoSR is MIT licensed, accepts one
+image, automatically removes the background, and the upstream project documents
+about 6 GB VRAM for one image.
 
-Set this environment variable on the server:
+The server keeps the model resident on the GPU and runs jobs one at a time.
+
+### Windows setup
+
+From the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File server\setup-windows.ps1
+powershell -ExecutionPolicy Bypass -File server\start-windows.ps1
+```
+
+Then open:
 
 ```
-FAL_KEY=<your fal server key>
+http://127.0.0.1:8787/health
 ```
 
-Deploy the repository as a Vercel project, then set the iOS app's 3D Engine endpoint to:
+In ScanAnything Settings set **Your 3D Engine** to:
 
 ```
-https://<your-domain>/api/generate
+http://<PC-LAN-OR-TAILSCALE-IP>:8787/generate
 ```
 
-For production/App Store builds, set `SCANANYTHING_API_BASE_URL` in the generated Info.plist/build settings instead of asking users to configure it.
+No FAL key, Replicate key, paid inference subscription, or per-generation fee
+is required.
 
-The provider credential must stay on the server. Do not embed `FAL_KEY` in the IPA.
+## Quality defaults
 
-## Build
+The local server currently uses:
 
-The iOS app targets iOS 18+ and has no third-party Swift package dependency.
+- automatic foreground/background isolation
+- TripoSR single-image reconstruction
+- CUDA when an NVIDIA GPU is available
+- 384 marching-cubes resolution
+- automatic 320/256 fallback if the GPU runs out of memory
+- GLB output stored locally in the app's Dex library
+
+## iOS build
 
 ```bash
 xcodebuild \
@@ -57,4 +85,4 @@ xcodebuild \
   build
 ```
 
-GitHub Actions also builds and packages an unsigned IPA.
+GitHub Actions builds and packages an unsigned IPA automatically.

@@ -6,9 +6,9 @@ struct GenerationSettingsView: View {
 
     var body: some View {
         Form {
-            Section("3D Engine") {
+            Section("Your 3D Engine") {
                 TextField(
-                    "https://your-domain.com/api/generate",
+                    "http://YOUR-PC:8787/generate",
                     text: $generationEndpoint,
                     axis: .vertical
                 )
@@ -16,7 +16,13 @@ struct GenerationSettingsView: View {
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
 
-                Text("Production builds should point this at the ScanAnything server proxy. The model provider key stays on the server, never in the app.")
+                Text("This build uses your own free TripoSR server. No paid generation API or provider key is required.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("PC setup") {
+                Text("Run server/setup-windows.ps1 once, then server/start-windows.ps1. Use your PC LAN or Tailscale address above.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

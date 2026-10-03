@@ -29,6 +29,6 @@ struct DexRootView: View {
                 }
             }
         }
-        .tint(.dexRed)
+        .tint(Color.dexRed)
     }
 }
