@@ -51,6 +51,14 @@ jobs:
           test -f ScanAnything/Models/TripoSRCoreML/NeRFQuery.mlpackage/Manifest.json
           du -sh ScanAnything/Models/TripoSRCoreML
 
+      - name: Verify app has no inference network path
+        run: |
+          set -euxo pipefail
+          if grep -R -nE 'URLSession|NWConnection|NSLocalNetworkUsageDescription|SCANANYTHING_API_BASE_URL' ScanAnything ScanAnything.xcodeproj --include='*.swift' --include='project.pbxproj'; then
+            echo "Network-backed inference code/config must not ship in ScanAnything."
+            exit 1
+          fi
+
       - name: Build unsigned app
         run: |
           set -o pipefail
@@ -87,6 +95,43 @@ jobs:
         with:
           name: ScanAnything-unsigned
           path: ScanAnything-unsigned.ipa
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Split IPA for direct retrieval
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path("ScanAnything-unsigned.ipa")
+          chunk_size = 480 * 1024 * 1024
+          data = source.open("rb")
+          index = 0
+          while True:
+              chunk = data.read(chunk_size)
+              if not chunk:
+                  break
+              Path(f"ScanAnything-unsigned.ipa.part-{index}").write_bytes(chunk)
+              index += 1
+          if index != 2:
+              raise SystemExit(f"Expected 2 IPA chunks, produced {index}")
+          PY
+          ls -lh ScanAnything-unsigned.ipa.part-*
+
+      - name: Upload IPA part 0
+        uses: actions/upload-artifact@v6
+        with:
+          name: ScanAnything-unsigned-part-0
+          path: ScanAnything-unsigned.ipa.part-0
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload IPA part 1
+        uses: actions/upload-artifact@v6
+        with:
+          name: ScanAnything-unsigned-part-1
+          path: ScanAnything-unsigned.ipa.part-1
           if-no-files-found: error
           compression-level: 0
 
