@@ -67,7 +67,10 @@ actor OnDeviceTripoSREngine {
         let encoderInput = try MLDictionaryFeatureProvider(
             dictionary: ["image": MLFeatureValue(multiArray: imageArray)]
         )
-        let encoderOutput = try models.encoder.prediction(from: encoderInput)
+        let encoderOutput = try models.encoder.prediction(
+            from: encoderInput,
+            options: MLPredictionOptions()
+        )
         guard let triplane = encoderOutput.featureValue(for: "triplane")?.multiArrayValue else {
             throw OnDevice3DError.invalidModelOutput("triplane")
         }
@@ -414,7 +417,10 @@ actor OnDeviceTripoSREngine {
                     "xyz": MLFeatureValue(multiArray: xyz),
                 ]
             )
-            let output = try decoder.prediction(from: input)
+            let output = try decoder.prediction(
+                from: input,
+                options: MLPredictionOptions()
+            )
 
             guard let density = output.featureValue(for: "density")?.multiArrayValue else {
                 throw OnDevice3DError.invalidModelOutput("density")
