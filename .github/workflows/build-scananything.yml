@@ -3,7 +3,7 @@ name: Build ScanAnything
 on:
   push:
     branches:
-      - scananything-app
+      - main
   workflow_dispatch:
 
 permissions:
