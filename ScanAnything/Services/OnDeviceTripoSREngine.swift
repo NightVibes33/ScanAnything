@@ -1,5 +1,5 @@
 import CoreImage
-@preconcurrency import CoreML
+@preconcurrency @preconcurrency import CoreML
 import Foundation
 import ImageIO
 import SceneKit
