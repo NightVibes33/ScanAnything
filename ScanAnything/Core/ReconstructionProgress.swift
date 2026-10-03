@@ -15,8 +15,8 @@ struct ReconstructionProgress: Equatable, Sendable {
 
 enum ProcessingTimeText {
     static func remaining(_ interval: TimeInterval?) -> String? {
-        guard let interval, interval.isFinite, interval > 0 else { return nil }
-        let seconds = max(1, Int(ceil(interval)))
+        guard let interval, interval.isFinite, interval >= 0 else { return nil }
+        let seconds = max(0, Int(ceil(interval)))
         if seconds < 60 {
             return "\(seconds)s"
         }
