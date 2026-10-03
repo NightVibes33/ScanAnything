@@ -6,7 +6,8 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */		
+/* Begin PBXBuildFile section */
+/* End PBXBuildFile section */
 
 
 /* Begin PBXContainerItemProxy section */
@@ -41,7 +42,8 @@
 		FRAMEWORKSPHASE /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = (							);
+			files = (
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		TESTFRAMEWORKSPHASE /* Frameworks */ = {
@@ -143,7 +145,6 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
-				tr,
 				Base,
 			);
 			mainGroup = MAINGROUP;
@@ -292,8 +293,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ScanAnything;
-				INFOPLIST_KEY_SCANANYTHING_API_BASE_URL = "$(SCANANYTHING_API_BASE_URL)";
-				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;\n\t\t\t\tINFOPLIST_KEY_NSCameraUsageDescription = "ScanAnything uses the camera only when you choose to photograph an object for a 3D Dex entry.";\n\t\t\t\tINFOPLIST_KEY_NSLocalNetworkUsageDescription = "ScanAnything connects to your own 3D generation computer on your local network.";
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "ScanAnything uses the camera only when you choose to photograph an object for a 3D Dex entry.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ScanAnything connects to your own 3D generation computer on your local network.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
@@ -324,8 +326,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ScanAnything;
-				INFOPLIST_KEY_SCANANYTHING_API_BASE_URL = "$(SCANANYTHING_API_BASE_URL)";
-				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;\n\t\t\t\tINFOPLIST_KEY_NSCameraUsageDescription = "ScanAnything uses the camera only when you choose to photograph an object for a 3D Dex entry.";\n\t\t\t\tINFOPLIST_KEY_NSLocalNetworkUsageDescription = "ScanAnything connects to your own 3D generation computer on your local network.";
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "ScanAnything uses the camera only when you choose to photograph an object for a 3D Dex entry.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "ScanAnything connects to your own 3D generation computer on your local network.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
