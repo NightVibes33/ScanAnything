@@ -70,6 +70,8 @@ fileprivate final class ScanAnythingSplatRenderer: NSObject, MTKViewDelegate {
     private var yaw: Float = 0.2
     private var pitch: Float = -0.08
     private var distance: Float = 2.2
+    private var modelCenter = SIMD3<Float>(repeating: 0)
+    private var modelRadius: Float = 1
 
     init?(view: MTKView) {
         guard let device = view.device,
@@ -107,6 +109,11 @@ fileprivate final class ScanAnythingSplatRenderer: NSObject, MTKViewDelegate {
                     return try await reader.readAll()
                 }.value
                 try Task.checkCancellation()
+
+                let fit = Self.cameraFit(for: points)
+                modelCenter = fit.center
+                modelRadius = fit.radius
+                distance = fit.distance
 
                 let renderer = try SplatRenderer(
                     device: device,
@@ -163,13 +170,13 @@ fileprivate final class ScanAnythingSplatRenderer: NSObject, MTKViewDelegate {
         let projection = perspective(
             fovy: 55 * .pi / 180,
             aspect: Float(drawableSize.width / drawableSize.height),
-            near: 0.01,
-            far: 100
+            near: max(0.01, distance * 0.01),
+            far: max(100, distance + modelRadius * 6)
         )
         let viewMatrix = translation(0, 0, -distance)
             * rotationMatrix(radians: pitch, axis: SIMD3<Float>(1, 0, 0))
             * rotationMatrix(radians: yaw, axis: SIMD3<Float>(0, 1, 0))
-            * rotationMatrix(radians: .pi, axis: SIMD3<Float>(0, 0, 1))
+            * translation(-modelCenter.x, -modelCenter.y, -modelCenter.z)
 
         let viewport = MTLViewport(
             originX: 0,
@@ -210,6 +217,44 @@ fileprivate final class ScanAnythingSplatRenderer: NSObject, MTKViewDelegate {
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         drawableSize = size
+    }
+
+    private static func cameraFit(
+        for points: [SplatPoint]
+    ) -> (center: SIMD3<Float>, radius: Float, distance: Float) {
+        guard !points.isEmpty else {
+            return (.zero, 1, 2.2)
+        }
+
+        var minimum = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
+        var maximum = SIMD3<Float>(repeating: -.greatestFiniteMagnitude)
+        var found = false
+
+        // Sample very large scenes to keep preview setup cheap while still
+        // fitting the camera to the reconstructed room instead of a fixed 2.2 m.
+        let step = max(1, points.count / 50_000)
+        for index in Swift.stride(from: 0, to: points.count, by: step) {
+            let position = points[index].position
+            guard position.x.isFinite,
+                  position.y.isFinite,
+                  position.z.isFinite
+            else { continue }
+
+            minimum = simd_min(minimum, position)
+            maximum = simd_max(maximum, position)
+            found = true
+        }
+
+        guard found else {
+            return (.zero, 1, 2.2)
+        }
+
+        let center = (minimum + maximum) * 0.5
+        let extent = maximum - minimum
+        let radius = max(0.25, simd_length(extent) * 0.5)
+        let halfFov: Float = 55 * .pi / 360
+        let distance = max(0.75, radius / tanf(halfFov) * 1.12)
+        return (center, radius, distance)
     }
 
     @objc
