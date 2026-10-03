@@ -139,7 +139,7 @@ final class CameraOnlyCaptureEngine {
 
     private let storage: ScanStorage
     private let purpose: CameraOnlyCapturePurpose
-    private let quality = CameraOnlyQualityProfile.highDetail
+    private let quality: CameraOnlyQualityProfile
     private var workspace: ScanWorkspace?
     private var recorder: CameraOnlyFrameRecorder?
     private var reconstructionTask: Task<Void, Never>?
@@ -182,6 +182,12 @@ final class CameraOnlyCaptureEngine {
     ) {
         self.storage = storage
         self.purpose = purpose
+        switch purpose {
+        case .room:
+            self.quality = .roomHighDetail
+        case .object, .product, .freeform:
+            self.quality = .highDetail
+        }
         self.trackingMessage = purpose.initialGuidance
     }
 
