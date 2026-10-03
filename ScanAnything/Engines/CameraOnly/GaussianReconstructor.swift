@@ -5,12 +5,15 @@ import os
 
 enum GaussianReconstructionError: LocalizedError {
     case insufficientFrames(Int)
+    case insufficientDetail(actual: Int, required: Int)
     case missingOutput
 
     var errorDescription: String? {
         switch self {
         case .insufficientFrames(let count):
             "Not enough usable camera views (\(count)). Scan more of the object and try again."
+        case .insufficientDetail(let actual, let required):
+            "Reconstruction only produced \(actual.formatted()) splats; at least \(required.formatted()) are required for this scan quality. Capture more overlap and retry."
         case .missingOutput:
             "The 3D model finished processing but the output file was not created."
         }
@@ -186,7 +189,8 @@ enum GaussianReconstructor {
                 // full-resolution training, preserve the current converged model
                 // instead of risking a permanent late-stage stall/loss.
                 let reachedUsefulModel =
-                    completed >= quality.minimumUsefulTrainingIterations
+                    completed >= quality.minimumUsefulTrainingIterations &&
+                    splatCount >= quality.minimumAcceptableSplatCount
 
                 if elapsed >= trainingDeadline, reachedUsefulModel {
                     emergencyFinalized = true
@@ -196,10 +200,12 @@ enum GaussianReconstructor {
                     break
                 }
 
-                if elapsed >= trainingDeadline + 3 {
+                if elapsed >= trainingDeadline + 3,
+                   completed >= quality.minimumEmergencyFinalizeIteration,
+                   splatCount >= quality.minimumAcceptableSplatCount {
                     emergencyFinalized = true
                     Self.logger.warning(
-                        "Forced realtime finalize step=\(completed) elapsed=\(elapsed)"
+                        "Forced deadline finalize step=\(completed) elapsed=\(elapsed)"
                     )
                     break
                 }
@@ -225,7 +231,7 @@ enum GaussianReconstructor {
                 }
 
                 if splatCount >= quality.maximumSafeSplatCount,
-                   reachedUsefulModel {
+                   splatCount >= quality.minimumAcceptableSplatCount {
                     emergencyFinalized = true
                     Self.logger.warning(
                         "Finalizing at splat safety cap step=\(completed) splats=\(splatCount)"
@@ -270,6 +276,12 @@ enum GaussianReconstructor {
 
             guard FileManager.default.fileExists(atPath: outputPath) else {
                 throw GaussianReconstructionError.missingOutput
+            }
+            guard splatCount >= quality.minimumAcceptableSplatCount else {
+                throw GaussianReconstructionError.insufficientDetail(
+                    actual: splatCount,
+                    required: quality.minimumAcceptableSplatCount
+                )
             }
             return splatCount
         }.value
