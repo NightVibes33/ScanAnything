@@ -92,8 +92,8 @@ struct ScanAnythingCoreTests {
         #expect(quality.gpuSyncInterval <= 100)
         #expect(quality.memorySafetyHeadroomMB >= 700)
         #expect(
-            quality.minimumEmergencyFinalizeIteration >
-            quality.stopDensifyAt
+            quality.minimumEmergencyFinalizeIteration <=
+            quality.minimumUsefulTrainingIterations + 100
         )
         #expect(
             quality.minimumEmergencyFinalizeIteration <
