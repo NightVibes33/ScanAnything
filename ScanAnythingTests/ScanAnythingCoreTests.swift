@@ -58,7 +58,7 @@ struct ScanAnythingCoreTests {
     func highDetailCameraQualityProfile() {
         let quality = CameraOnlyQualityProfile.highDetail
 
-        #expect(quality.datasetDownscaleFactor == 0.5)
+        #expect(quality.datasetDownscaleFactor == 1.0)
         #expect(quality.targetFrameCount == 16)
         #expect(quality.minimumFrameCount == 8)
         #expect(quality.maximumFrameCount >= quality.targetFrameCount)
@@ -109,6 +109,24 @@ struct ScanAnythingCoreTests {
         #expect(quality.depthPriorMinimumAnchors >= 24)
         #expect(quality.depthPriorMaximumPoints <= 40_000)
         #expect(quality.depthPriorVoxelSize <= 0.005)
+    }
+
+    @Test("Room capture uses the dense native-resolution reconstruction profile")
+    func roomHighDetailCameraQualityProfile() {
+        let quality = CameraOnlyQualityProfile.roomHighDetail
+
+        #expect(quality.datasetDownscaleFactor == 1.0)
+        #expect(quality.targetFrameCount >= 80)
+        #expect(quality.minimumFrameCount >= 48)
+        #expect(quality.maximumFeaturePoints >= 150_000)
+        #expect(quality.trainingIterations >= 7_000)
+        #expect(quality.minimumUsefulTrainingIterations >= 5_000)
+        #expect(quality.stopDensifyAt >= 4_000)
+        #expect(quality.maximumSafeSplatCount >= 800_000)
+        #expect(quality.minimumAcceptableSplatCount >= 150_000)
+        #expect(quality.depthPriorKeyframeCount >= 12)
+        #expect(quality.depthPriorMaximumPoints >= 100_000)
+        #expect(quality.maximumTrainingSeconds >= 600)
     }
 
     @Test("Universal capture keeps objects short while room scans collect broader coverage")
