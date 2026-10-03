@@ -1,0 +1,103 @@
+name: Build ScanAnything
+
+on:
+  push:
+    branches:
+      - scananything-app
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scananything-macos26-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unsigned-ipa:
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Toolchain
+        run: |
+          set -euxo pipefail
+          xcodebuild -version
+          swift --version
+          cmake --version || brew install cmake
+          xcodebuild -downloadComponent MetalToolchain
+
+      - name: Cache msplat iOS build
+        id: cache-msplat
+        uses: actions/cache@v4
+        with:
+          path: Vendor/msplat
+          key: msplat-ios-e8611098583059b82e0b7d35259fb4e9c42df248-macos26-v1
+
+      - name: Bootstrap msplat for iOS
+        if: steps.cache-msplat.outputs.cache-hit != 'true'
+        run: |
+          set -euxo pipefail
+          BUILD_JOBS=3 bash scripts/bootstrap-msplat.sh
+
+      - name: Resolve packages
+        run: |
+          set -euxo pipefail
+          xcodebuild             -project ScanAnything.xcodeproj             -scheme ScanAnything             -resolvePackageDependencies
+
+      - name: Build unsigned app
+        run: |
+          set -o pipefail
+          rm -rf DerivedData
+          xcodebuild             -project ScanAnything.xcodeproj             -scheme ScanAnything             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath DerivedData             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             build | tee xcodebuild.log
+
+      - name: Compile Swift Testing bundle
+        run: |
+          set -o pipefail
+          rm -rf TestDerivedData
+          xcodebuild \
+            -project ScanAnything.xcodeproj \
+            -scheme ScanAnything \
+            -configuration Debug \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath TestDerivedData \
+            -only-testing:ScanAnythingTests \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build-for-testing | tee xcodebuild-tests.log
+
+      - name: Package unsigned IPA
+        run: |
+          set -euxo pipefail
+          APP="$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name 'ScanAnything.app' -print -quit)"
+          test -n "$APP"
+          rm -rf Payload ScanAnything-unsigned.ipa
+          mkdir Payload
+          ditto "$APP" "Payload/ScanAnything.app"
+          /usr/bin/zip -qry ScanAnything-unsigned.ipa Payload
+          unzip -l ScanAnything-unsigned.ipa | grep 'Payload/ScanAnything.app/Info.plist'
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v6
+        with:
+          name: ScanAnything-unsigned
+          path: ScanAnything-unsigned.ipa
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ScanAnything-build-log
+          path: |
+            xcodebuild.log
+            xcodebuild-tests.log
+          if-no-files-found: ignore
