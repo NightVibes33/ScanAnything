@@ -139,7 +139,7 @@ final class ObjectCaptureEngine: ScanEngine {
             output = try await reconstructor.reconstruct(
                 workspace: workspace,
                 detail: detail,
-                maximumInputImages: 24
+                maximumInputImages: 16
             ) { [weak self] progress in
                 self?.phase = .reconstructing(progress)
             }

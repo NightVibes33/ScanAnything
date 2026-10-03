@@ -34,11 +34,11 @@ final class TurntableCaptureEngine: ScanEngine {
     /// Twenty views gives ~18° overlap around a full turn; learned/feature-based
     /// matching plus the fixed-camera mask keeps this viable while avoiding a
     /// 30–80 image photogrammetry solve.
-    static let minimumShots = 20
-    static let maximumShots = 24
+    static let minimumShots = 16
+    static let maximumShots = 18
 
     /// One complete pass before suggesting a small elevation change.
-    static let shotsPerRevolution = 20
+    static let shotsPerRevolution = 16
 
     /// Seconds between automatic shots. Roughly 10° of rotation per shot at a
     /// comfortable hand speed, which is the usual turntable step.

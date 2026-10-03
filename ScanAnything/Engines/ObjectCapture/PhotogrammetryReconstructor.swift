@@ -38,7 +38,7 @@ struct PhotogrammetryReconstructor {
         maskRect: CGRect? = nil,
         enableObjectMasking: Bool = true,
         framing: PoseDiagnostics.Framing = .orbit,
-        maximumInputImages: Int = 28,
+        maximumInputImages: Int = 20,
         onWarning: @escaping @MainActor (String) -> Void = { _ in },
         onProgress: @escaping @MainActor (ReconstructionProgress) -> Void
     ) async throws -> Output {
@@ -179,13 +179,21 @@ struct PhotogrammetryReconstructor {
         let startedAt = ProcessInfo.processInfo.systemUptime
         var smoothedRemaining: TimeInterval?
 
+        var lastEstimateTime = startedAt
+
         func smoothRemaining(_ value: TimeInterval) -> TimeInterval {
-            let safe = max(0.25, value)
+            let now = ProcessInfo.processInfo.systemUptime
+            let elapsedSinceEstimate = max(0, now - lastEstimateTime)
+            lastEstimateTime = now
+
+            let safe = max(1, value * 1.12)
             if let previous = smoothedRemaining {
-                let next = previous * 0.65 + safe * 0.35
+                let ceiling = max(1, previous - elapsedSinceEstimate)
+                let next = min(ceiling, safe)
                 smoothedRemaining = next
                 return next
             }
+
             smoothedRemaining = safe
             return safe
         }

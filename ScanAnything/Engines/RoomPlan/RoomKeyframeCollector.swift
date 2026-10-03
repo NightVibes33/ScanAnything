@@ -28,9 +28,9 @@ final class RoomKeyframeCollector {
 
     /// Hard ceiling for the optional photographic room pass. RoomPlan already
     /// provides metric structure; this image set is for appearance, so a bounded
-    /// 36-view solve is a better mobile trade-off than feeding hundreds of 4K
+    /// 16-view solve is a better mobile trade-off than feeding hundreds of 4K
     /// stills into on-device photogrammetry.
-    static let maximumFrames = 24
+    static let maximumFrames = 16
 
     /// A keyframe is only worth keeping if the camera actually moved — standing
     /// still produces near-identical images that add cost and no parallax.

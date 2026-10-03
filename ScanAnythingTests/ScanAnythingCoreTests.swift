@@ -128,10 +128,10 @@ struct ScanAnythingCoreTests {
         #expect(CameraOnlyCapturePurpose.product.isolatesForeground)
         #expect(CameraOnlyCapturePurpose.room.isolatesForeground == false)
 
-        #expect(TurntableCaptureEngine.minimumShots == 20)
-        #expect(TurntableCaptureEngine.maximumShots == 24)
+        #expect(TurntableCaptureEngine.minimumShots == 16)
+        #expect(TurntableCaptureEngine.maximumShots == 18)
         #expect(RoomKeyframeCollector.minimumFrames == 12)
-        #expect(RoomKeyframeCollector.maximumFrames == 24)
+        #expect(RoomKeyframeCollector.maximumFrames == 16)
     }
 
     @Test("Library records can carry a user-facing asset kind independent of backend")

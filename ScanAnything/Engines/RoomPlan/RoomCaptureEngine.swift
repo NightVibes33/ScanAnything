@@ -288,7 +288,7 @@ final class RoomCaptureEngine: ScanEngine {
                 // The cameras walked *through* this subject, so the orbit coverage
                 // measures do not apply.
                 framing: .interior,
-                maximumInputImages: RoomKeyframeCollector.maximumFrames,
+                maximumInputImages: 16,
                 onWarning: { [weak self] note in
                     self?.photographicNote = note
                 }
