@@ -85,7 +85,7 @@ struct TurntableFlowView: View {
                 // the view: converting layer coordinates to capture coordinates needs
                 // the preview layer, which only this wrapper owns.
                 CameraPreviewView(session: session, maskFrame: maskFrame) { normalized in
-                    engine.objectctMaskRect = normalized
+                    engine.objectMaskRect = normalized
                 }
                 .ignoresSafeArea()
             }
