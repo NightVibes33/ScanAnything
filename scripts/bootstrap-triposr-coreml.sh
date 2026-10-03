@@ -40,6 +40,11 @@ PY
 # discover those cached .mlpackage paths as duplicate Core ML resources.
 rm -rf "$DEST/.cache"
 
+# huggingface_hub keeps resumable-download metadata under .cache. Because the
+# Xcode project uses a filesystem-synchronized group, leaving that directory
+# inside ScanAnything would make Xcode discover duplicate .mlpackage paths.
+rm -rf "$DEST/.cache"
+
 test -f "$DEST/ImageToTriplane.mlpackage/Manifest.json"
 test -f "$DEST/NeRFQuery.mlpackage/Manifest.json"
 
