@@ -19,16 +19,8 @@ struct RootView: View {
 }
 
 private struct ScanHomeView: View {
-    @Environment(ScanStorage.self) private var storage
-    @Environment(StoreManager.self) private var store
-
-    @State private var isPresentingCapture = false
-    @State private var isPresentingPaywall = false
+    @State private var isPresentingObjectCapture = false
     @State private var permissionDenied = false
-
-    private var usesEnhancedPipeline: Bool {
-        DeviceCapabilities.supportsObjectCapture && DeviceCapabilities.supportsPhotogrammetry
-    }
 
     var body: some View {
         ScrollView {
@@ -43,76 +35,71 @@ private struct ScanHomeView: View {
                     Text("Scan Anything")
                         .font(.largeTitle.bold())
 
-                    Text("Turn real objects into 3D with your iPhone.")
+                    Text("Take a few good photos and turn real objects and spaces into clean 3D assets.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
 
-                VStack(spacing: 12) {
-                    Button {
-                        if !store.isPro && !storage.hasFreeScanRemaining {
-                            isPresentingPaywall = true
+                Button {
+                    Task {
+                        guard await DeviceCapabilities.requestCameraAccess() else {
+                            permissionDenied = true
                             return
                         }
-
-                        Task {
-                            guard await DeviceCapabilities.requestCameraAccess() else {
-                                permissionDenied = true
-                                return
-                            }
-                            isPresentingCapture = true
-                        }
-                    } label: {
-                        Label("Scan Anything", systemImage: "camera.viewfinder")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 58)
+                        isPresentingObjectCapture = true
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-
-                    HStack(spacing: 8) {
-                        Image(systemName: usesEnhancedPipeline ? "sensor.tag.radiowaves.forward.fill" : "camera.fill")
-                        Text(usesEnhancedPipeline ? "Enhanced LiDAR + photogrammetry" : "Camera 3D • no LiDAR required")
-                    }
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                } label: {
+                    Label("Scan Object", systemImage: "camera.viewfinder")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
                 }
-
-                VStack(alignment: .leading, spacing: 14) {
-                    feature("Move around it", "Capture every side while the app keeps the best tracked views.", "rotate.3d")
-                    feature("Build it on-device", "Processing stays on your iPhone; no upload is required.", "iphone.gen3")
-                    feature("Keep and share it", "Save your scans in a local library and export supported formats.", "square.and.arrow.up")
-                }
-                .padding()
-                .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 22))
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
 
                 NavigationLink {
                     ScanSetupView()
                 } label: {
-                    HStack {
-                        Label("More scan modes", systemImage: "slider.horizontal.3")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                    }
-                    .padding()
-                    .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 16))
+                    Label("More scan modes", systemImage: "square.grid.2x2")
+                        .font(.subheadline.weight(.semibold))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
+
+                Text("Object  •  Room  •  Product  •  Freeform")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    feature(
+                        "A few good views",
+                        "Capture the subject from different sides instead of recording hundreds of frames.",
+                        "camera.on.rectangle"
+                    )
+                    feature(
+                        "Automatic cleanup",
+                        "Object scans isolate the foreground before reconstruction to reduce table and wall background.",
+                        "wand.and.stars"
+                    )
+                    feature(
+                        "Works without Pro hardware",
+                        "LiDAR and depth sensors improve supported scans automatically but never unlock the mode.",
+                        "iphone.gen3"
+                    )
+                    feature(
+                        "3D library",
+                        "Finished objects and spaces stay organized locally for preview and export.",
+                        "square.stack.3d.up"
+                    )
+                }
+                .padding()
+                .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 22))
             }
             .padding()
         }
         .navigationTitle("Scan")
-        .fullScreenCover(isPresented: $isPresentingCapture) {
-            if usesEnhancedPipeline {
-                ObjectCaptureFlowView()
-            } else {
-                CameraOnlyCaptureView()
-            }
-        }
-        .sheet(isPresented: $isPresentingPaywall) {
-            ProPaywallView()
+        .fullScreenCover(isPresented: $isPresentingObjectCapture) {
+            CameraOnlyCaptureView(purpose: .object)
         }
         .alert("Camera access is off", isPresented: $permissionDenied) {
             Button("OK", role: .cancel) {}
@@ -141,10 +128,6 @@ private struct ScanHomeView: View {
 private struct ScanAnythingSettingsView: View {
     @Environment(StoreManager.self) private var store
 
-    private var enhanced: Bool {
-        DeviceCapabilities.supportsObjectCapture && DeviceCapabilities.supportsPhotogrammetry
-    }
-
     var body: some View {
         List {
             Section("ScanAnything Pro") {
@@ -160,12 +143,12 @@ private struct ScanAnythingSettingsView: View {
                 }
             }
 
-            Section("This iPhone") {
-                LabeledContent("Object scanning", value: enhanced ? "Enhanced" : "Camera 3D")
-                capability("LiDAR scene mesh", DeviceCapabilities.supportsSceneReconstruction)
-                capability("Object Capture", DeviceCapabilities.supportsObjectCapture)
-                capability("Room scanning", DeviceCapabilities.supportsRoomCapture)
-                capability("TrueDepth", DeviceCapabilities.hasTrueDepthCamera)
+            Section("This Device") {
+                LabeledContent("Universal scanning", value: DeviceCapabilities.supportsCameraOnly ? "Ready" : "Unavailable")
+                enhancement("LiDAR enhancement", DeviceCapabilities.supportsSceneReconstruction)
+                enhancement("Object Capture enhancement", DeviceCapabilities.supportsObjectCapture)
+                enhancement("RoomPlan enhancement", DeviceCapabilities.supportsRoomCapture)
+                enhancement("TrueDepth enhancement", DeviceCapabilities.hasTrueDepthCamera)
             }
 
             Section("About") {
@@ -178,31 +161,17 @@ private struct ScanAnythingSettingsView: View {
                     "Terms of Use",
                     destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
                 )
-                NavigationLink("Open-source acknowledgements") {
-                    List {
-                        Section("ObjectScanner") {
-                            Text("Original scanning foundation by Burak Şahinkaya. Apache License 2.0. The upstream LICENSE and NOTICE files are included with this source tree.")
-                        }
-                        Section("msplat-ios") {
-                            Text("On-device Gaussian Splatting training. Apache License 2.0.")
-                        }
-                        Section("MetalSplatter") {
-                            Text("Gaussian Splatting renderer for Apple platforms. MIT License.")
-                        }
-                    }
-                    .navigationTitle("Acknowledgements")
-                }
             }
         }
         .navigationTitle("Settings")
     }
 
-    private func capability(_ title: String, _ available: Bool) -> some View {
+    private func enhancement(_ title: String, _ available: Bool) -> some View {
         HStack {
             Text(title)
             Spacer()
-            Image(systemName: available ? "checkmark.circle.fill" : "minus.circle")
-                .foregroundStyle(available ? .green : .secondary)
+            Text(available ? "Available" : "Not present")
+                .foregroundStyle(.secondary)
         }
     }
 }

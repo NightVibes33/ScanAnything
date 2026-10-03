@@ -3,11 +3,17 @@ import RealityKit
 import SwiftUI
 
 struct CameraOnlyCaptureView: View {
+    let purpose: CameraOnlyCapturePurpose
+
     @Environment(ScanStorage.self) private var storage
     @Environment(\.dismiss) private var dismiss
 
     @State private var engine: CameraOnlyCaptureEngine?
     @State private var startupError: String?
+
+    init(purpose: CameraOnlyCapturePurpose = .object) {
+        self.purpose = purpose
+    }
 
     var body: some View {
         ZStack {
@@ -42,6 +48,11 @@ struct CameraOnlyCaptureView: View {
             ZStack {
                 ARCameraPreview(session: engine.session)
                     .ignoresSafeArea()
+
+                if purpose.isolatesForeground {
+                    subjectGuide
+                }
+
                 captureOverlay(engine)
             }
 
@@ -52,13 +63,14 @@ struct CameraOnlyCaptureView: View {
                     .tint(.white)
                     .padding(.horizontal, 36)
 
-                Text("Building your 3D model")
+                Text(engine.processingMessage)
                     .font(.title3.bold())
+                    .multilineTextAlignment(.center)
                 Text("\(Int(engine.processingProgress * 100))% • \(engine.gaussianCount.formatted()) splats")
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.secondary)
 
-                Text("Everything is processing on this iPhone.")
+                Text("Keep ScanAnything open while this device finishes the model.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -95,6 +107,42 @@ struct CameraOnlyCaptureView: View {
         }
     }
 
+    private var subjectGuide: some View {
+        VStack(spacing: 10) {
+            Spacer()
+
+            RoundedRectangle(cornerRadius: 34)
+                .stroke(
+                    .white.opacity(0.82),
+                    style: StrokeStyle(
+                        lineWidth: 2,
+                        dash: [10, 8]
+                    )
+                )
+                .frame(
+                    maxWidth: 320,
+                    maxHeight: 360
+                )
+                .overlay(alignment: .center) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+
+            Text("Keep the subject centered inside the frame")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(.black.opacity(0.55), in: Capsule())
+
+            Spacer()
+        }
+        .padding(.horizontal, 28)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
     private func captureOverlay(_ engine: CameraOnlyCaptureEngine) -> some View {
         VStack {
             HStack {
@@ -112,11 +160,16 @@ struct CameraOnlyCaptureView: View {
 
                 Spacer()
 
-                Text("\(engine.capturedCount)")
-                    .font(.caption.bold().monospacedDigit())
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.black.opacity(0.55), in: Capsule())
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text("\(engine.capturedCount) views")
+                        .font(.caption.bold().monospacedDigit())
+                    Text(engine.captureFormatDescription)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.black.opacity(0.55), in: Capsule())
             }
 
             Spacer()
@@ -172,7 +225,7 @@ struct CameraOnlyCaptureView: View {
 
     private func startIfNeeded() {
         guard engine == nil else { return }
-        let candidate = CameraOnlyCaptureEngine(storage: storage)
+        let candidate = CameraOnlyCaptureEngine(storage: storage, purpose: purpose)
         do {
             try candidate.start()
             engine = candidate

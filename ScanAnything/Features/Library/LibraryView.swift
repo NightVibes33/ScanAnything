@@ -15,22 +15,51 @@ struct LibraryView: View {
     @State private var isSelecting = false
     @State private var selection = Set<UUID>()
     @State private var isConfirmingBulkDelete = false
+    @State private var selectedFilter: LibraryFilter = .all
+
+    private var filteredScans: [ScanRecord] {
+        storage.scans.filter { selectedFilter.includes($0) }
+    }
 
     var body: some View {
         Group {
             if storage.scans.isEmpty {
                 ContentUnavailableView(
-                    "Henüz tarama yok",
+                    "No scans yet",
                     systemImage: "square.stack.3d.up.slash",
-                    description: Text("Tara sekmesinden ilk taramanızı yapın.")
+                    description: Text("Create your first scan from the Scan tab.")
                 )
             } else {
                 List {
-                    ForEach(storage.scans) { record in
-                        row(for: record)
+                    Section {
+                        filterBar
+                            .listRowInsets(
+                                EdgeInsets(
+                                    top: 8,
+                                    leading: 0,
+                                    bottom: 8,
+                                    trailing: 0
+                                )
+                            )
                     }
-                    .onDelete { offsets in
-                        delete(storage.scans.enumerated().filter { offsets.contains($0.offset) }.map(\.element))
+
+                    if filteredScans.isEmpty {
+                        ContentUnavailableView(
+                            "No \(selectedFilter.title.lowercased()) scans",
+                            systemImage: selectedFilter.symbolName,
+                            description: Text("Choose another category or create a new scan.")
+                        )
+                    } else {
+                        ForEach(filteredScans) { record in
+                            row(for: record)
+                        }
+                        .onDelete { offsets in
+                            delete(
+                                filteredScans.enumerated()
+                                    .filter { offsets.contains($0.offset) }
+                                    .map(\.element)
+                            )
+                        }
                     }
                 }
             }
@@ -50,14 +79,14 @@ struct LibraryView: View {
             }
         }
         .confirmationDialog(
-            "\(selection.count) tarama silinsin mi?",
+            "Delete \(selection.count) scans?",
             isPresented: $isConfirmingBulkDelete,
             titleVisibility: .visible
         ) {
-            Button("Sil", role: .destructive) { deleteSelected() }
-            Button("Vazgeç", role: .cancel) {}
+            Button("Delete", role: .destructive) { deleteSelected() }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Modeller ve kaynak görüntüler kalıcı olarak silinir. Bu geri alınamaz.")
+            Text("Models and source images will be permanently deleted. This cannot be undone.")
         }
     }
 
@@ -92,15 +121,42 @@ struct LibraryView: View {
         }
     }
 
+    private var filterBar: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(LibraryFilter.allCases) { filter in
+                    Button {
+                        selectedFilter = filter
+                        selection.removeAll()
+                    } label: {
+                        Label(filter.title, systemImage: filter.symbolName)
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                selectedFilter == filter
+                                    ? Color.accentColor.opacity(0.18)
+                                    : Color.secondary.opacity(0.10),
+                                in: Capsule()
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+        }
+        .scrollIndicators(.hidden)
+    }
+
     // MARK: - Toolbar
 
     private var selectionTitle: String {
-        guard isSelecting else { return "Kütüphane" }
-        return selection.isEmpty ? String(localized: "Seçin") : "\(selection.count) seçildi"
+        guard isSelecting else { return "Library" }
+        return selection.isEmpty ? String(localized: "Select") : "\(selection.count) selected"
     }
 
     private var selectModeButton: some View {
-        Button(isSelecting ? "Bitti" : "Seç") {
+        Button(isSelecting ? "Done" : "Select") {
             isSelecting.toggle()
             // Ticks left behind would silently apply to the next round of selecting.
             if !isSelecting { selection.removeAll() }
@@ -108,11 +164,16 @@ struct LibraryView: View {
     }
 
     private var selectAllButton: some View {
-        Button(selection.count == storage.scans.count ? "Seçimi Kaldır" : "Tümünü Seç") {
-            if selection.count == storage.scans.count {
-                selection.removeAll()
+        let visibleIDs = Set(filteredScans.map(\.id))
+        let allVisibleSelected =
+            !visibleIDs.isEmpty &&
+            visibleIDs.isSubset(of: selection)
+
+        return Button(allVisibleSelected ? "Deselect All" : "Select All") {
+            if allVisibleSelected {
+                selection.subtract(visibleIDs)
             } else {
-                selection = Set(storage.scans.map(\.id))
+                selection.formUnion(visibleIDs)
             }
         }
     }
@@ -121,10 +182,10 @@ struct LibraryView: View {
         Button {
             isConfirmingBulkDelete = true
         } label: {
-            Label("Sil", systemImage: "trash")
+            Label("Delete", systemImage: "trash")
         }
         // Red rather than the accent colour, so it reads as destructive even though
-        // it now sits in the navigation bar next to a harmless "Bitti".
+        // it now sits in the navigation bar next to a harmless "Done".
         .tint(.red)
         .disabled(selection.isEmpty)
     }
@@ -142,8 +203,58 @@ struct LibraryView: View {
     private func delete(_ records: [ScanRecord]) {
         for record in records {
             // The thumbnail is cached by URL, and a new scan can reuse a path.
-            ThumbnailStore.shared.invalidate(storage.modelURL(for: record))
+            let modelURL = storage.modelURL(for: record)
+            ThumbnailStore.shared.invalidate(modelURL)
+            ThumbnailStore.shared.invalidate(
+                modelURL.deletingLastPathComponent()
+                    .appending(path: "hero.png", directoryHint: .notDirectory)
+            )
             storage.delete(record)
+        }
+    }
+}
+
+private enum LibraryFilter: String, CaseIterable, Identifiable {
+    case all
+    case object
+    case room
+    case product
+    case freeform
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: "All"
+        case .object: "Objects"
+        case .room: "Rooms"
+        case .product: "Products"
+        case .freeform: "Freeform"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .all: "square.grid.2x2"
+        case .object: "cube.transparent"
+        case .room: "house"
+        case .product: "shippingbox"
+        case .freeform: "viewfinder"
+        }
+    }
+
+    func includes(_ record: ScanRecord) -> Bool {
+        switch self {
+        case .all:
+            true
+        case .object:
+            record.assetKind == .object
+        case .room:
+            record.assetKind == .room
+        case .product:
+            record.assetKind == .product
+        case .freeform:
+            record.assetKind == .freeform
         }
     }
 }
@@ -154,12 +265,20 @@ private struct ScanRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            if record.isPreviewable {
-                ModelThumbnailView(url: modelURL, side: 54)
+            let heroURL = modelURL
+                .deletingLastPathComponent()
+                .appending(path: "hero.png", directoryHint: .notDirectory)
+
+            if FileManager.default.fileExists(
+                atPath: heroURL.path(percentEncoded: false)
+            ) {
+                ModelThumbnailView(url: heroURL, side: 68)
+            } else if record.isPreviewable {
+                ModelThumbnailView(url: modelURL, side: 68)
             } else {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(.quaternary)
-                    .frame(width: 54, height: 54)
+                    .frame(width: 68, height: 68)
                     .overlay {
                         Image(systemName: record.isGaussianSplat ? "sparkles.rectangle.stack" : "aqi.medium")
                             .foregroundStyle(.secondary)
@@ -171,18 +290,22 @@ private struct ScanRow: View {
                     .font(.body)
                     .lineLimit(1)
                 HStack(spacing: 5) {
-                    Label(record.engine.displayName, systemImage: record.engine.symbolName)
-                    if let summary = record.summary {
+                    Label(
+                        record.assetKind?.displayName ?? record.engine.displayName,
+                        systemImage: record.assetKind?.symbolName ?? record.engine.symbolName
+                    )
+                    if let summary = record.summary,
+                       summary != record.assetKind?.displayName {
                         Text("·")
                         Text(summary)
                     }
                     if let count = record.imageCount {
                         Text("·")
-                        Text("\(count) görüntü")
+                        Text("\(count) images")
                     }
                     if let count = record.pointCount {
                         Text("·")
-                        Text("\(count) nokta")
+                        Text("\(count) points")
                     }
                 }
                 .font(.caption)
@@ -221,7 +344,7 @@ struct ScanDetailView: View {
             detail(for: record)
         } else {
             // Reachable if the scan is deleted while this screen is on-screen.
-            ContentUnavailableView("Tarama bulunamadı", systemImage: "questionmark.folder")
+            ContentUnavailableView("Scan not found", systemImage: "questionmark.folder")
         }
     }
 
@@ -233,7 +356,7 @@ struct ScanDetailView: View {
                         .frame(height: 360)
                         .listRowInsets(EdgeInsets())
                 } footer: {
-                    Text("Camera-only 3D model rendered directly on the iPhone.")
+                    Text("Interactive 3D model rendered directly on this device.")
                 }
             } else if record.isPreviewable {
                 Section {
@@ -251,27 +374,30 @@ struct ScanDetailView: View {
                 }
             }
 
-            Section("Bilgi") {
-                TextField("İsim", text: $draftName)
+            Section("Info") {
+                TextField("Name", text: $draftName)
                     .onSubmit { storage.rename(record, to: draftName) }
-                LabeledContent("Mod", value: record.engine.displayName)
+                LabeledContent(
+                    "Type",
+                    value: record.assetKind?.displayName ?? record.engine.displayName
+                )
                 if let summary = record.summary {
-                    LabeledContent("İçerik", value: summary)
+                    LabeledContent("Contents", value: summary)
                 }
                 if let detail = record.detail {
-                    LabeledContent("Yoğunluk", value: detail.displayName)
+                    LabeledContent("Detail", value: detail.displayName)
                 }
-                LabeledContent("Ölçek", value: record.isMetricallyScaled ? String(localized: "Gerçek boyut") : String(localized: "Ölçeksiz"))
-                LabeledContent("Tarih", value: record.createdAt.formatted(date: .abbreviated, time: .shortened))
+                LabeledContent("Scale", value: record.isMetricallyScaled ? String(localized: "Real size") : String(localized: "Unscaled"))
+                LabeledContent("Date", value: record.createdAt.formatted(date: .abbreviated, time: .shortened))
                 if let count = record.imageCount {
-                    LabeledContent("Görüntü", value: "\(count)")
+                    LabeledContent("Images", value: "\(count)")
                 }
                 if let count = record.pointCount {
-                    LabeledContent("Nokta", value: "\(count)")
+                    LabeledContent("Points", value: "\(count)")
                 }
                 if let dimensions = record.dimensionsMillimetres, dimensions.count == 3 {
                     LabeledContent(
-                        "Boyut",
+                        "Dimensions",
                         value: "\(dimensions[0]) × \(dimensions[1]) × \(dimensions[2]) mm"
                     )
                 }
@@ -293,10 +419,10 @@ struct ScanDetailView: View {
             }
         }
         .alert(
-            "İşlem başarısız",
+            "Operation failed",
             isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })
         ) {
-            Button("Tamam") { errorMessage = nil }
+            Button("OK") { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
         }
@@ -383,7 +509,7 @@ struct ScanDetailView: View {
                 .foregroundStyle(.secondary)
 
             if exportFormat.isGeometryOnly {
-                Label("Bu format materyal/texture taşımaz — sadece geometri.", systemImage: "info.circle")
+                Label("This format does not include materials or textures — geometry only.", systemImage: "info.circle")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -392,7 +518,7 @@ struct ScanDetailView: View {
                 export(record)
             } label: {
                 HStack {
-                    Text("Dışa Aktar")
+                    Text("Export")
                     if isExporting {
                         Spacer()
                         ProgressView()
@@ -401,16 +527,16 @@ struct ScanDetailView: View {
             }
             .disabled(isExporting)
         } header: {
-            Text("Dışa aktarma")
+            Text("Export")
         } footer: {
-            Text("Hazırlanan dosya sağ üstteki paylaş düğmesinde görünür.")
+            Text("The prepared file appears in the Share button at the top right.")
         }
     }
 
     private func fullDetailSection(for record: ScanRecord) -> some View {
         Section {
             LabeledContent(
-                "Kaynak görüntüler",
+                "Source images",
                 value: ByteCountFormatter.string(
                     fromByteCount: storage.intermediateBytes(for: record),
                     countStyle: .file
@@ -421,7 +547,7 @@ struct ScanDetailView: View {
                 bundleImages(record)
             } label: {
                 HStack {
-                    Text("Görüntüleri Mac'e Aktar (.zip)")
+                    Text("Export Images to Mac (.zip)")
                     if isBundling {
                         Spacer()
                         ProgressView()
@@ -430,20 +556,20 @@ struct ScanDetailView: View {
             }
             .disabled(isBundling)
 
-            DisclosureGroup("Mac tarafında ne yapmalı?") {
+            DisclosureGroup("What should I do on a Mac?") {
                 Text(SourceImageBundle.macInstructions)
                     .font(.footnote.monospaced())
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
 
-            Button("Kaynak Görüntüleri Sil", role: .destructive) {
+            Button("Delete Source Images", role: .destructive) {
                 storage.purgeIntermediates(for: record)
             }
         } header: {
-            Text("Tam detay")
+            Text("Full detail")
         } footer: {
-            Text("Cihaz üstü model `reduced` seviyede. Aynı görüntüleri bir Mac'te `detail: .full` veya `.raw` ile işlerseniz belirgin şekilde yüksek poligonlu mesh alırsınız. Görüntüleri silerseniz bu yol kapanır.")
+            Text("The on-device model uses the `reduced` level. Reprocessing the same images on a Mac with `detail: .full` or `.raw` can produce a much higher-polygon mesh. Deleting the source images removes that option.")
         }
     }
 

@@ -1,6 +1,127 @@
 @preconcurrency import ARKit
 import Foundation
 import Observation
+import UIKit
+
+enum CameraOnlyCapturePurpose: String, Sendable {
+    case object
+    case room
+    case product
+    case freeform
+
+    var minimumFrameCount: Int {
+        switch self {
+        case .object: 8
+        case .product: 16
+        case .freeform: 32
+        case .room: 48
+        }
+    }
+
+    var maximumFrameCount: Int {
+        switch self {
+        case .object: 20
+        case .product: 32
+        case .freeform: 72
+        case .room: 120
+        }
+    }
+
+    var minimumViewCoverage: Double {
+        switch self {
+        case .object: 0.25
+        case .product: 0.30
+        case .freeform: 0.40
+        case .room: 0.45
+        }
+    }
+
+    var initialGuidance: String {
+        switch self {
+        case .object: "Move around the object — aim for 8–20 clear views"
+        case .room: "Walk through the space and cover walls, corners and furniture"
+        case .product: "Capture every side of the item"
+        case .freeform: "Move through the scene and cover it from different angles"
+        }
+    }
+
+    var processingTitle: String {
+        switch self {
+        case .object: "Building clean 3D object"
+        case .room: "Building 3D space"
+        case .product: "Building product model"
+        case .freeform: "Building 3D scan"
+        }
+    }
+
+    var recordName: String {
+        switch self {
+        case .object: "3D Object"
+        case .room: "3D Room"
+        case .product: "3D Product"
+        case .freeform: "3D Scan"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .object: "Object"
+        case .room: "Camera Room"
+        case .product: "Product"
+        case .freeform: "Freeform"
+        }
+    }
+
+    var isolatesForeground: Bool {
+        self == .object || self == .product
+    }
+
+    var assetKind: ScanAssetKind {
+        switch self {
+        case .object: .object
+        case .room: .room
+        case .product: .product
+        case .freeform: .freeform
+        }
+    }
+}
+
+private struct CameraOnlyPreparedDataset: Sendable {
+    let backgroundIsolated: Bool
+    let dimensionsMillimetres: [Int]?
+}
+
+private enum CameraOnlyGeometryMetrics {
+    static func robustDimensionsMillimetres(
+        points: [CameraOnlyFeaturePoint]
+    ) -> [Int]? {
+        guard points.count >= 100 else { return nil }
+
+        let xs = points.map { $0.position.x }.sorted()
+        let ys = points.map { $0.position.y }.sorted()
+        let zs = points.map { $0.position.z }.sorted()
+
+        func span(_ values: [Float]) -> Float {
+            let last = values.count - 1
+            let low = min(last, max(0, Int(Double(last) * 0.02)))
+            let high = min(last, max(low, Int(Double(last) * 0.98)))
+            return max(0, values[high] - values[low])
+        }
+
+        let metres = [span(xs), span(ys), span(zs)]
+        guard metres.allSatisfy({ $0.isFinite }),
+              let longest = metres.max(),
+              longest >= 0.01,
+              longest <= 50
+        else {
+            return nil
+        }
+
+        return metres.map {
+            max(1, Int(($0 * 1_000).rounded()))
+        }
+    }
+}
 
 @MainActor
 @Observable
@@ -17,28 +138,44 @@ final class CameraOnlyCaptureEngine {
     let session = ARSession()
 
     private let storage: ScanStorage
+    private let purpose: CameraOnlyCapturePurpose
+    private let quality = CameraOnlyQualityProfile.highDetail
     private var workspace: ScanWorkspace?
     private var recorder: CameraOnlyFrameRecorder?
     private var reconstructionTask: Task<Void, Never>?
 
-    private let targetFrameCount = 80
     private(set) var phase: Phase = .idle
     private(set) var capturedCount = 0
     private(set) var featurePointCount = 0
-    private(set) var trackingMessage = "Move slowly around the object"
+    private(set) var viewCoverage = 0.0
+    private(set) var trackingMessage: String
     private(set) var processingProgress = 0.0
+    private(set) var processingMessage = "Preparing 3D reconstruction"
     private(set) var gaussianCount = 0
+    private(set) var captureFormatDescription = "High quality"
+
+    private var requiredViewCoverage: Double {
+        max(quality.minimumViewCoverage, purpose.minimumViewCoverage)
+    }
 
     var coverage: Double {
-        min(1, Double(capturedCount) / Double(targetFrameCount))
+        guard requiredViewCoverage > 0 else { return 0 }
+        return min(1, viewCoverage / requiredViewCoverage)
     }
 
     var canFinish: Bool {
-        capturedCount >= 24 && featurePointCount >= 100
+        capturedCount >= max(quality.minimumFrameCount, purpose.minimumFrameCount) &&
+        featurePointCount >= quality.minimumFeaturePoints &&
+        viewCoverage >= requiredViewCoverage
     }
 
-    init(storage: ScanStorage) {
+    init(
+        storage: ScanStorage,
+        purpose: CameraOnlyCapturePurpose = .object
+    ) {
         self.storage = storage
+        self.purpose = purpose
+        self.trackingMessage = purpose.initialGuidance
     }
 
     func start() throws {
@@ -53,12 +190,16 @@ final class CameraOnlyCaptureEngine {
 
         capturedCount = 0
         featurePointCount = 0
+        viewCoverage = 0
         processingProgress = 0
+        processingMessage = "Preparing 3D reconstruction"
         gaussianCount = 0
-        trackingMessage = "Move slowly around the object"
+        trackingMessage = purpose.initialGuidance
 
         let recorder = CameraOnlyFrameRecorder(
-            imagesURL: workspace.imagesURL
+            imagesURL: workspace.imagesURL,
+            quality: quality,
+            purpose: purpose
         ) { [weak self] event in
             Task { @MainActor in
                 self?.handle(event)
@@ -72,6 +213,39 @@ final class CameraOnlyCaptureEngine {
         configuration.worldAlignment = .gravity
         configuration.isAutoFocusEnabled = true
         configuration.environmentTexturing = .none
+        configuration.videoHDRAllowed = false
+
+        // LiDAR is an optional accelerator, never a mode requirement. On devices
+        // that expose metric scene depth, feed it into the exact same universal
+        // camera pipeline used by every other iPhone/iPad.
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+            configuration.frameSemantics.insert(.sceneDepth)
+        }
+
+        let highResolutionFormat =
+            ARWorldTrackingConfiguration.recommendedVideoFormatForHighResolutionFrameCapturing
+        let selectedFormat =
+            highResolutionFormat ??
+            ARWorldTrackingConfiguration.recommendedVideoFormatFor4KResolution ??
+            ARWorldTrackingConfiguration.supportedVideoFormats.first
+
+        if let format = selectedFormat {
+            configuration.videoFormat = format
+
+            let width = Int(format.imageResolution.width)
+            let height = Int(format.imageResolution.height)
+            let longEdge = max(width, height)
+
+            if highResolutionFormat != nil,
+               format.isRecommendedForHighResolutionFrameCapturing {
+                captureFormatDescription =
+                    "Hi-Res stills • \(width)×\(height) tracking • \(format.framesPerSecond) fps"
+            } else {
+                let prefix = longEdge >= 3_800 ? "4K" : "High quality"
+                captureFormatDescription =
+                    "\(prefix) • \(width)×\(height) • \(format.framesPerSecond) fps"
+            }
+        }
 
         session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
         phase = .capturing
@@ -84,90 +258,166 @@ final class CameraOnlyCaptureEngine {
         else { return }
 
         guard canFinish else {
-            phase = .failed(
-                "Keep scanning. Capture at least 24 well-tracked views around the object."
-            )
+            trackingMessage = purpose.initialGuidance
             return
         }
 
         session.pause()
         session.delegate = nil
+        UIApplication.shared.isIdleTimerDisabled = true
         phase = .reconstructing
-        processingProgress = 0
+        processingProgress = 0.01
+        processingMessage = "Preparing 3D reconstruction"
 
         let snapshot = recorder.snapshot()
         let count = snapshot.frames.count
         let outputURL = workspace.root.appending(
-            path: "model.spz",
+            path: "model.ply",
             directoryHint: .notDirectory
         )
+
+        let reconstructionQuality = quality
+        let reconstructionPurpose = purpose
 
         reconstructionTask?.cancel()
         reconstructionTask = Task { [weak self] in
             guard let self else { return }
 
             do {
-                try await Task.detached(priority: .userInitiated) {
+                let prepared = try await Task.detached(priority: .userInitiated) {
+                    try Task.checkCancellation()
+
+                    // Calibrate learned metric depth from the untouched camera
+                    // images first. Background isolation is a rendering/training
+                    // concern and should not throw away cues the depth model or
+                    // ARKit anchor fit can use.
+                    let enrichedPoints = LearnedDepthSeedService.enrich(
+                        snapshot: snapshot,
+                        root: workspace.root,
+                        quality: reconstructionQuality
+                    )
+
+                    let enrichedSnapshot = CameraOnlyCaptureSnapshot(
+                        frames: snapshot.frames,
+                        featurePoints: enrichedPoints
+                    )
+
+                    let trainingSnapshot: CameraOnlyCaptureSnapshot
+                    if reconstructionPurpose.isolatesForeground {
+                        // Hero and training masks are generated from untouched
+                        // source photos. The user's originals remain exportable.
+                        if let heroFrame = snapshot.frames[safe: snapshot.frames.count / 2] {
+                            let inputURL = workspace.root.appending(path: heroFrame.filePath)
+                            let heroURL = workspace.root.appending(path: "hero.png")
+                            try? await ObjectIsolationService.createTransparentPNG(
+                                imageAt: inputURL,
+                                outputURL: heroURL
+                            )
+                        }
+
+                        trainingSnapshot = try await ObjectIsolationService
+                            .prepareTrainingSnapshot(
+                                snapshot: enrichedSnapshot,
+                                root: workspace.root,
+                                minimumFrames: reconstructionQuality.minimumFrameCount
+                            )
+                    } else {
+                        trainingSnapshot = enrichedSnapshot
+                    }
+
                     try Task.checkCancellation()
                     try CameraOnlyDatasetWriter.write(
-                        snapshot: snapshot,
+                        snapshot: trainingSnapshot,
                         to: workspace.root
+                    )
+
+                    let backgroundIsolated =
+                        reconstructionPurpose.isolatesForeground &&
+                        trainingSnapshot.frames.count >= reconstructionQuality.minimumFrameCount &&
+                        trainingSnapshot.frames.allSatisfy {
+                            $0.filePath.hasPrefix("isolated-images/")
+                        }
+
+                    let dimensions =
+                        reconstructionPurpose.isolatesForeground && !backgroundIsolated
+                        ? nil
+                        : CameraOnlyGeometryMetrics.robustDimensionsMillimetres(
+                            points: trainingSnapshot.featurePoints
+                        )
+
+                    return CameraOnlyPreparedDataset(
+                        backgroundIsolated: backgroundIsolated,
+                        dimensionsMillimetres: dimensions
                     )
                 }.value
 
                 try Task.checkCancellation()
+                self.processingProgress = 0.05
+                self.processingMessage = reconstructionPurpose.processingTitle
 
                 let splats = try await GaussianReconstructor.reconstruct(
                     datasetRoot: workspace.root,
-                    outputURL: outputURL
+                    outputURL: outputURL,
+                    quality: quality,
+                    backgroundIsolated: prepared.backgroundIsolated
                 ) { [weak self] progress, splatCount in
                     guard let self else { return }
-                    self.processingProgress = progress
+                    self.processingProgress = min(0.95, 0.05 + (progress * 0.90))
                     self.gaussianCount = splatCount
+
+                    if progress >= 0.99 {
+                        self.processingMessage = "Finalizing Gaussian model"
+                    } else if progress >= 0.90 {
+                        self.processingMessage = "Finishing full-resolution training"
+                    } else {
+                        self.processingMessage = reconstructionPurpose.processingTitle
+                    }
                 }
 
                 try Task.checkCancellation()
-
-                if let heroFrame = snapshot.frames[safe: snapshot.frames.count / 2] {
-                    let inputURL = workspace.root.appending(path: heroFrame.filePath)
-                    let heroURL = workspace.root.appending(path: "hero.png")
-                    _ = try? await Task.detached(priority: .utility) {
-                        try await ObjectIsolationService.createTransparentPNG(
-                            imageAt: inputURL,
-                            outputURL: heroURL
-                        )
-                    }.value
-                }
+                self.processingProgress = 0.96
+                self.processingMessage = "Creating scan preview"
 
                 try Task.checkCancellation()
+                self.processingProgress = 0.99
+                self.processingMessage = "Saving scan"
 
                 let record = ScanRecord(
                     id: workspace.id,
-                    name: "3D Scan",
+                    name: reconstructionPurpose.recordName,
                     engine: .cameraOnly,
-                    modelFileName: "model.spz",
-                    isMetricallyScaled: false,
+                    assetKind: reconstructionPurpose.assetKind,
+                    modelFileName: "model.ply",
+                    // ARKit world poses and both ARKit/LiDAR seed coordinates use
+                    // metres, so the fixed-camera optimization preserves metric scale.
+                    isMetricallyScaled: true,
                     imageCount: count,
                     pointCount: splats,
+                    dimensionsMillimetres: prepared.dimensionsMillimetres,
                     detail: nil,
-                    summary: "Camera 3D"
+                    summary: reconstructionPurpose.summary
                 )
                 storage.commit(record, workspace: workspace)
                 self.workspace = nil
                 self.recorder = nil
+                self.processingProgress = 1.0
+                UIApplication.shared.isIdleTimerDisabled = false
                 phase = .done(record)
             } catch is CancellationError {
                 storage.discard(workspace)
                 self.workspace = nil
                 self.recorder = nil
+                UIApplication.shared.isIdleTimerDisabled = false
                 phase = .cancelled
             } catch {
+                UIApplication.shared.isIdleTimerDisabled = false
                 phase = .failed(error.localizedDescription)
             }
         }
     }
 
     func cancel() {
+        UIApplication.shared.isIdleTimerDisabled = false
         reconstructionTask?.cancel()
         reconstructionTask = nil
 
@@ -187,16 +437,21 @@ final class CameraOnlyCaptureEngine {
         guard case .capturing = phase else { return }
 
         switch event {
-        case .progress(let count, let featurePointCount, let message):
+        case .progress(
+            let count,
+            let featurePointCount,
+            let viewCoverage,
+            let message
+        ):
             capturedCount = count
             self.featurePointCount = featurePointCount
+            self.viewCoverage = viewCoverage
             trackingMessage = message
         case .failure(let message):
             trackingMessage = message
         }
     }
 }
-
 
 private extension Collection {
     subscript(safe index: Index) -> Element? {

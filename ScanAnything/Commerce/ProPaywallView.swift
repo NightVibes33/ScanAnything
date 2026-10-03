@@ -18,17 +18,17 @@ struct ProPaywallView: View {
                         Text("ScanAnything Pro")
                             .font(.largeTitle.bold())
 
-                        Text("Unlimited saved scans and the full export toolkit.")
+                        Text("Advanced scan and export tools for ScanAnything.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
-                        benefit("Unlimited saved scans", symbol: "infinity")
+                        benefit("Pro scan and export tools", symbol: "square.and.arrow.up")
                         benefit("Maximum reconstruction quality", symbol: "sparkles")
                         benefit("Pro mesh and splat export tools", symbol: "square.and.arrow.up")
-                        benefit("Room and advanced scan workflows", symbol: "viewfinder")
+                        benefit("Advanced processing and export workflows", symbol: "viewfinder")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
