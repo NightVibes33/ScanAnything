@@ -9,9 +9,13 @@ if [[ -d "$DEST/ImageToTriplane.mlpackage" && -d "$DEST/NeRFQuery.mlpackage" ]];
   exit 0
 fi
 
-python3 -m pip install --user --quiet "huggingface_hub>=0.27,<1.0"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+python3 -m venv "$TMP_DIR/venv"
+"$TMP_DIR/venv/bin/python" -m pip install --quiet --upgrade pip
+"$TMP_DIR/venv/bin/python" -m pip install --quiet "huggingface_hub>=0.27,<1.0"
 
-python3 - <<'PY'
+"$TMP_DIR/venv/bin/python" - <<'PY'
 from pathlib import Path
 from huggingface_hub import snapshot_download
 
