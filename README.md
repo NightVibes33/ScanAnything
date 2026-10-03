@@ -1,59 +1,52 @@
 # ScanAnything
 
-## Platform scope
+ScanAnything is a one-photo 3D collection app.
 
-ScanAnything v1 is iPhone-only and targets iOS 18+. Regular iPhones use the camera-only Gaussian pipeline; supported Pro/LiDAR iPhones automatically gain Apple Object Capture and LiDAR modes.
+The old photogrammetry / Gaussian-splat scanner has been removed from the app product. The primary flow is now:
 
-Turn real objects into 3D on an iPhone.
+1. Take one photo or choose one photo.
+2. Send only that selected image to the configured generation service.
+3. Generate a textured 3D asset with Hunyuan 3D v3.1 Pro.
+4. Download the GLB (and USDZ when the provider returns it).
+5. Register the finished object as a numbered local Dex entry.
+6. Browse, rotate, search, rename, export, or open the object in AR when USDZ is available.
 
-ScanAnything has one consumer-facing scan flow and chooses the best reconstruction pipeline available on the device.
+## UI
 
-## Device paths
+The app is a real collection/Dex interface, not a 3D editor. It uses a red hardware-inspired shell, numbered specimen grid, detail records, local search, and a dedicated one-photo capture screen.
 
-### Regular iPhone — no LiDAR required
+The grid/detail structure is inspired by the open-source PocketDex project by Viktor Gidlöf (MIT). No Pokémon artwork, sprites, names, data, logos, or other franchise assets are bundled.
 
-1. ARKit captures tracked RGB camera frames.
-2. Camera intrinsics and camera-to-world poses are stored with each accepted frame.
-3. ARKit raw feature points seed the reconstruction.
-4. The capture is written as a Nerfstudio-compatible dataset.
-5. msplat trains a 3D Gaussian Splat locally with Metal.
-6. The result is stored as a compact SPZ model.
-7. MetalSplatter renders the result directly in the library.
+## 3D backend
 
-No server upload is required.
+The repository includes a Vercel-compatible API under `api/`.
 
-### Pro / LiDAR iPhone
+The API uses:
 
-Supported devices automatically use Apple's guided Object Capture flow and on-device photogrammetry from the upstream ObjectScanner foundation.
+- `fal-ai/hunyuan-3d/v3.1/pro/image-to-3d`
+- PBR enabled
+- 1,000,000 target faces
+- queue submission + polling, so the iOS app does not keep a long HTTP request open
 
-This path produces a metrically scaled USDZ mesh and supports the upstream mesh export tools.
+Set this environment variable on the server:
 
-### Additional modes
+```
+FAL_KEY=<your fal server key>
+```
 
-The advanced modes screen keeps the upstream:
+Deploy the repository as a Vercel project, then set the iOS app's 3D Engine endpoint to:
 
-- RoomPlan room capture
-- TrueDepth point-cloud capture
-- turntable photogrammetry
+```
+https://<your-domain>/api/generate
+```
 
-Availability is determined at runtime by Apple's framework capability checks rather than hard-coded device names.
+For production/App Store builds, set `SCANANYTHING_API_BASE_URL` in the generated Info.plist/build settings instead of asking users to configure it.
+
+The provider credential must stay on the server. Do not embed `FAL_KEY` in the IPA.
 
 ## Build
 
-Requirements:
-
-- iOS 18+
-- Xcode 16+
-- CMake
-- macOS for the build toolchain
-
-Prepare the on-device Gaussian trainer:
-
-```bash
-bash scripts/bootstrap-msplat.sh
-```
-
-Then build:
+The iOS app targets iOS 18+ and has no third-party Swift package dependency.
 
 ```bash
 xcodebuild \
@@ -64,33 +57,4 @@ xcodebuild \
   build
 ```
 
-The GitHub Actions workflow performs the same bootstrap and unsigned build automatically.
-
-## App Store configuration
-
-Current bundle identifier:
-
-`com.nightvibes33.scananything`
-
-Before App Store submission, configure the Apple Developer team/signing identity for the target. The source tree intentionally does not contain another developer's Team ID.
-
-## Storage
-
-Each scan is stored under the app's Documents directory in:
-
-`Scans/<UUID>/`
-
-Camera-only scans retain:
-
-- accepted source JPEGs
-- `transforms.json`
-- ARKit feature-point seed PLY
-- final `model.spz`
-
-LiDAR/Object Capture scans retain the upstream source images/checkpoints and final USDZ.
-
-## Open source
-
-The scanner foundation comes from ObjectScanner under Apache-2.0. Camera-only training uses msplat-ios under Apache-2.0. Gaussian rendering uses MetalSplatter under MIT.
-
-See `LICENSE`, `NOTICE`, and `THIRD_PARTY_NOTICES.md`.
+GitHub Actions also builds and packages an unsigned IPA.

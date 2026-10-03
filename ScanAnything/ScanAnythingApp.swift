@@ -2,18 +2,13 @@ import SwiftUI
 
 @main
 struct ScanAnythingApp: App {
-    @State private var storage = ScanStorage()
-    @State private var store = StoreManager()
+    @State private var dexStore = DexStore()
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environment(storage)
-                .environment(store)
+            DexRootView()
+                .environment(dexStore)
                 .preferredColorScheme(.dark)
-                .task {
-                    await store.prepare()
-                }
         }
     }
 }

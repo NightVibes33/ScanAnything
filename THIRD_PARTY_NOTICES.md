@@ -1,35 +1,36 @@
 # Third-party notices
 
-ScanAnything includes and builds on open-source software.
+## PocketDex+
 
-## ObjectScanner
+Project: `brillcp/PocketDex`
 
-Original project: `burakSahinkaya/ObjectScanner`.
+Copyright (c) 2025 Viktor Gidlöf
 
-License: Apache License 2.0.
+License: MIT
 
-The upstream `LICENSE` and `NOTICE` files are retained at the repository root. ScanAnything preserves the notices required by the upstream project.
+ScanAnything's collection-grid and detail-screen direction is adapted from the open-source PocketDex+ SwiftUI project. The original MIT license is reproduced below.
 
-## msplat-ios
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-Project: `frs0n/msplat-ios`.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-Used for on-device 3D Gaussian Splatting training on iOS.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE.
 
-License: Apache License 2.0.
+## @fal-ai/client
 
-Pinned revision:
+Package: `@fal-ai/client`
 
-`e8611098583059b82e0b7d35259fb4e9c42df248`
+License: MIT
 
-The dependency is downloaded and built by `scripts/bootstrap-msplat.sh`; it is not vendored into this repository.
-
-## MetalSplatter
-
-Project: `scier/MetalSplatter`.
-
-Used for rendering Gaussian Splatting models on Apple platforms.
-
-License: MIT.
-
-Swift Package version requirement: 1.0.1 up to the next major version.
+Used only by the optional server-side generation proxy under `api/`. The
+provider key is never part of the iOS application.

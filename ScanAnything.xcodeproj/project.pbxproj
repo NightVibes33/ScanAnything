@@ -6,11 +6,7 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		MSPLATBUILDFILE /* Msplat in Frameworks */ = {isa = PBXBuildFile; productRef = MSPLATPRODUCT /* Msplat */; };
-		METALSPLATBUILDFILE /* MetalSplatter in Frameworks */ = {isa = PBXBuildFile; productRef = METALSPLATPRODUCT /* MetalSplatter */; };
-		SPLATIOBUILDFILE /* SplatIO in Frameworks */ = {isa = PBXBuildFile; productRef = SPLATIOPRODUCT /* SplatIO */; };
-/* End PBXBuildFile section */
+/* Begin PBXBuildFile section */		METALSPLATBUILDFILE /* MetalSplatter in Frameworks */ = {isa = PBXBuildFile; productRef = METALSPLATPRODUCT /* MetalSplatter */; };/* End PBXBuildFile section */
 
 
 /* Begin PBXContainerItemProxy section */
@@ -45,11 +41,7 @@
 		FRAMEWORKSPHASE /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = (
-				MSPLATBUILDFILE /* Msplat in Frameworks */,
-				METALSPLATBUILDFILE /* MetalSplatter in Frameworks */,
-				SPLATIOBUILDFILE /* SplatIO in Frameworks */,
-			);
+			files = (				METALSPLATBUILDFILE /* MetalSplatter in Frameworks */,			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		TESTFRAMEWORKSPHASE /* Frameworks */ = {
@@ -100,9 +92,6 @@
 			);
 			name = ScanAnything;
 			packageProductDependencies = (
-				MSPLATPRODUCT /* Msplat */,
-				METALSPLATPRODUCT /* MetalSplatter */,
-				SPLATIOPRODUCT /* SplatIO */,
 			);
 			productName = ScanAnything;
 			productReference = PRODUCTAPPREF /* ScanAnything.app */;
@@ -161,8 +150,6 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			packageReferences = (
-				MSPLATPACKAGE /* XCLocalSwiftPackageReference "msplat" */,
-				METALSPLATPACKAGE /* XCRemoteSwiftPackageReference "MetalSplatter" */,
 			);
 			productRefGroup = PRODUCTSGROUP /* Products */;
 			projectDirPath = "";
@@ -216,41 +203,8 @@
 		};
 /* End PBXTargetDependency section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		MSPLATPACKAGE /* XCLocalSwiftPackageReference "msplat" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Vendor/msplat/swift;
-		};
-/* End XCLocalSwiftPackageReference section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		METALSPLATPACKAGE /* XCRemoteSwiftPackageReference "MetalSplatter" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/scier/MetalSplatter.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.1;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
 
-/* Begin XCSwiftPackageProductDependency section */
-		MSPLATPRODUCT /* Msplat */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = MSPLATPACKAGE /* XCLocalSwiftPackageReference "msplat" */;
-			productName = Msplat;
-		};
-		METALSPLATPRODUCT /* MetalSplatter */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = METALSPLATPACKAGE /* XCRemoteSwiftPackageReference "MetalSplatter" */;
-			productName = MetalSplatter;
-		};
-		SPLATIOPRODUCT /* SplatIO */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = METALSPLATPACKAGE /* XCRemoteSwiftPackageReference "MetalSplatter" */;
-			productName = SplatIO;
-		};
-/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		PRJDEBUG /* Debug */ = {
@@ -338,7 +292,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ScanAnything;
-				INFOPLIST_KEY_NSCameraUsageDescription = "ScanAnything uses the camera to capture objects and create 3D models.";
+				INFOPLIST_KEY_SCANANYTHING_API_BASE_URL = "$(SCANANYTHING_API_BASE_URL)";
+				INFOPLIST_KEY_NSCameraUsageDescription = "ScanAnything uses the camera only when you choose to photograph an object for a 3D Dex entry.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
@@ -369,7 +324,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ScanAnything;
-				INFOPLIST_KEY_NSCameraUsageDescription = "ScanAnything uses the camera to capture objects and create 3D models.";
+				INFOPLIST_KEY_SCANANYTHING_API_BASE_URL = "$(SCANANYTHING_API_BASE_URL)";
+				INFOPLIST_KEY_NSCameraUsageDescription = "ScanAnything uses the camera only when you choose to photograph an object for a 3D Dex entry.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
